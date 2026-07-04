@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>TRENCHERS — Hold the Line</title>
-<link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -182,7 +181,7 @@
     <div class="verdict" id="goVerdict"></div>
     <div id="onlineBox" style="display:none;margin-top:14px;width:100%;max-width:340px;">
       <div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;">
-        <input id="callsign" maxlength="20" placeholder="CALLSIGN" autocomplete="off"
+        <input id="callsign" maxlength="20" placeholder="ENTER YOUR NAME" autocomplete="off"
           style="flex:1;background:#0c0b07;border:1px solid rgba(200,155,74,.4);color:var(--bone);font-family:'Space Mono',monospace;font-size:13px;padding:9px 12px;letter-spacing:1px;text-transform:uppercase;" />
         <button class="btn" id="submitRun" style="margin:0;padding:11px 16px;font-size:12px;">SUBMIT</button>
       </div>
@@ -714,7 +713,14 @@ function gameOver(){state='gameover';sessionBest=Math.max(sessionBest,scars);Aud
     if(wallet){
       btn.disabled=false;btn.textContent='SUBMIT';
       document.getElementById('lbResult').innerHTML='<div style="font-size:11px;color:var(--bone-dim);">Posting as ⛓ '+wallet.slice(0,6)+'…'+wallet.slice(-4)+'</div>';
-      fetch(BACKEND_URL+'/player/'+wallet).then(r=>r.json()).then(d=>{if(d.data&&d.data.name&&!ci.value)ci.value=d.data.name;}).catch(()=>{});
+      fetch(BACKEND_URL+'/player/'+wallet).then(r=>r.json()).then(d=>{
+        if(d.data&&d.data.name){
+          ci.value=d.data.name; ci.readOnly=true; ci.style.opacity='0.85';
+          document.getElementById('lbResult').innerHTML='<div style="font-size:11px;color:var(--bone-dim);">Playing as <b style="color:var(--brass-br);">'+d.data.name+'</b> · saved to your wallet</div>';
+        } else {
+          ci.readOnly=false; ci.placeholder='ENTER YOUR NAME (SAVED ONCE)';
+        }
+      }).catch(()=>{});
     } else {
       btn.disabled=true;btn.textContent='SUBMIT';
       document.getElementById('lbResult').innerHTML='Connect a wallet on the <a href="index.html" style="color:var(--brass-br);">home page</a> to post your score.';

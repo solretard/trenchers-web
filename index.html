@@ -8,7 +8,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Trenchers">
 <title>TRENCHERS</title>
-<link rel="icon" type="image/png" href="favicon.png">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{--mud-900:#100f0a;--mud-800:#16140d;--brass:#c89b4a;--brass-br:#e7c87e;--bone:#e8e0cc;--bone-dim:#9a9079;--flare:#ff5a26;--gain:#9bb04f;--cyan:#39c6e0;}
@@ -129,7 +128,18 @@
   <button class="wallet-btn" id="walletBtn">CONNECT WALLET</button>
   <div class="wallet-note">Sign-in only · we never ask you to sign a transaction · rewards are sent <b>to</b> you</div>
 
+  <button id="lbBtn" style="margin-top:14px;font-family:'Oswald';font-weight:700;letter-spacing:3px;font-size:12px;color:var(--bone-dim);background:transparent;border:1px solid rgba(154,144,121,.4);padding:10px 26px;cursor:pointer;">🏆 LEADERBOARD</button>
+
   <div class="foot">TRENCHERS — hold the line.</div>
+</div>
+
+<!-- leaderboard modal -->
+<div class="wmodal" id="lbModal">
+  <div class="wm-box">
+    <div class="wm-x" id="lbX">✕</div>
+    <div style="font-family:'Oswald';font-weight:700;letter-spacing:2px;font-size:18px;color:var(--brass-br);text-align:center;">TOP TRENCHERS</div>
+    <div id="lbList" style="margin-top:14px;font-family:'Space Mono',monospace;font-size:12px;color:var(--bone);line-height:1.9;">Loading…</div>
+  </div>
 </div>
 
 <!-- wallet picker -->
@@ -321,6 +331,25 @@ document.querySelectorAll('.modes .card').forEach(c=>c.addEventListener('click',
 document.getElementById('rConnect').addEventListener('click',()=>{ document.getElementById('remind').classList.remove('on'); wmodal.classList.add('on'); wmStatus.textContent='Connect so your scores count and you\u2019re reward-eligible.'; wmStatus.classList.remove('warn'); });
 document.getElementById('rPlay').addEventListener('click',()=>{ document.getElementById('remind').classList.remove('on'); if(pendingHref) location.href=pendingHref; });
 document.getElementById('remind').addEventListener('click',e=>{ if(e.target.id==='remind') e.currentTarget.classList.remove('on'); });
+
+// ===== standalone leaderboard =====
+const LB_API = "https://web-production-e7758.up.railway.app";
+const lbModal=document.getElementById('lbModal'), lbList=document.getElementById('lbList');
+async function openLeaderboard(){
+  lbModal.classList.add('on'); lbList.textContent='Loading…';
+  try{
+    const rows=await (await fetch(LB_API+'/leaderboard?limit=15')).json();
+    if(!rows.length){ lbList.innerHTML='<div style="color:var(--bone-dim);text-align:center;">No scores yet — be the first to hold the line.</div>'; return; }
+    lbList.innerHTML=rows.map(r=>
+      '<div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(200,155,74,.12);padding:3px 0;">'
+      +'<span>#'+r.rank+' '+r.handle+' <span style="color:var(--flare);">['+r.faction+']</span></span>'
+      +'<b style="color:var(--brass-br);">'+r.scars+'</b></div>').join('');
+  }catch(e){ lbList.innerHTML='<div style="color:var(--bone-dim);text-align:center;">Couldn\u2019t load the leaderboard. Try again in a moment.</div>'; }
+}
+document.getElementById('lbBtn').addEventListener('click',openLeaderboard);
+document.getElementById('lbX').addEventListener('click',()=>lbModal.classList.remove('on'));
+lbModal.addEventListener('click',e=>{ if(e.target.id==='lbModal') lbModal.classList.remove('on'); });
+
 render();
 </script>
 </body>

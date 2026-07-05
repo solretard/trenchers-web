@@ -330,7 +330,7 @@ function devRugHeld(){const t=curHeldToken();if(!t||t.rugged)return;t.fate='rug'
 const TERR=[{key:'bear',name:'BEAR FRONT',vil:'BEAR'},{key:'rugger',name:"RUGGERS' TERRITORY",vil:'DEV RUGGER'},{key:'rbro',name:'RUGGED BRO TERRITORY',vil:'RUGGED BRO'}];
 let state='menu',player=null,bears=[],bullets=[],parts=[],floaters=[],orb=null,bombs=[],blasts=[];
 let chosen='aper',elapsed=0,scars=0,kills=0,spawnTimer=0,fireTimer=0,meleeTimer=0,shake=0,dmgFlash=0,sessionBest=0;
-let depth=1,territory='bear',roomTime=0,doorCD=0,fadeA=0,depthMax=1,roomScarBase=0,orbTimer=0;
+let depth=1,territory='bear',roomTime=0,doorCD=0,fadeA=0,depthMax=1,roomScarBase=0,orbTimer=0,healCD=0;
 const MELEE_RANGE=54,MELEE_CD=0.42,MELEE_DMG=24,BLAST_RADIUS=98,BOMB_DMG=95,BOMB_KILLS=10;
 let heldThrough=0,heldToZero=0,bailedOnRug=0,sells=0,lossSells=0,apes=0,closeKills=0,farKills=0;
 const keys={};const SCALE=3.2;
@@ -339,7 +339,7 @@ let moveStick={id:null,ox:0,oy:0,cx:0,cy:0};
 let aimStick={id:null,ox:0,oy:0,cx:0,cy:0,active:false};
 const STICK_MAX=52, AIM_ASSIST=0.26;
 
-function spawnOrb(){const a=Math.random()*6.283,d=150+Math.random()*200;const px=player?player.x:W/2,py=player?player.y:H/2;orb={x:Math.max(PADX+30,Math.min(W-PADX-30,px+Math.cos(a)*d)),y:Math.max(PADY+30,Math.min(H-PADY-30,py+Math.sin(a)*d)),t:0,used:false};}
+function spawnOrb(){if(healCD>0){orb=null;return;}const a=Math.random()*6.283,d=150+Math.random()*200;const px=player?player.x:W/2,py=player?player.y:H/2;orb={x:Math.max(PADX+30,Math.min(W-PADX-30,px+Math.cos(a)*d)),y:Math.max(PADY+30,Math.min(H-PADY-30,py+Math.sin(a)*d)),t:0,used:false};}
 function doorReq(){return 2000;}
 function roomEarned(){return Math.max(0,scars-roomScarBase);}
 let doorWasOpen=false;
@@ -393,7 +393,7 @@ function startGame(cls){
   bears.length=0;bullets.length=0;parts.length=0;floaters.length=0;market.length=0;held=null;orb=null;bombs.length=0;blasts.length=0;
   for(let i=0;i<6;i++)spawnToken();
   elapsed=0;scars=0;kills=0;spawnTimer=2.4;fireTimer=0;meleeTimer=0;shake=0;dmgFlash=0;tickAcc=0;
-  depth=1;depthMax=1;territory='bear';roomTime=0;doorCD=1.3;fadeA=0.8;doorWasOpen=false;
+  depth=1;depthMax=1;territory='bear';roomTime=0;doorCD=1.3;fadeA=0.8;doorWasOpen=false;healCD=0;
   heldThrough=0;heldToZero=0;bailedOnRug=0;sells=0;lossSells=0;apes=0;closeKills=0;farKills=0;
   let lo=0;market.forEach((t,i)=>{if(t.mc<market[lo].mc)lo=i;});apeToken(lo);
   spawnOrb();
@@ -451,9 +451,9 @@ function update(dt){
   if(!doorWasOpen&&roomEarned()>=doorReq()){doorWasOpen=true;AudioFX.sfx.recover();floaters.push({x:W/2,y:doorRect().y+doorRect().h+40,txt:'DOOR UNLOCKED',life:1.4,vy:-20,col:'#e7c87e'});}
   if(doorCD<=0&&roomEarned()>=doorReq()){const dr=doorRect();if(player.x>dr.x+12&&player.x<dr.x+dr.w-12&&player.y<dr.y+36){enterRoom(depth+1);return;}}
 
-  // orb pickup
-  if(orb&&!orb.used){orb.t+=dt;if(player.hp<player.maxhp*0.95&&Math.hypot(orb.x-player.x,orb.y-player.y)<30){orb.used=true;orbTimer=4.5;const heal=Math.round(player.maxhp*0.55);player.hp=Math.min(player.maxhp,player.hp+heal);AudioFX.sfx.heal();floaters.push({x:player.x,y:player.y-32,txt:'+'+heal+' MORALE',life:1.1,vy:-32,col:'#9bb04f'});}}
-  else if(orb&&orb.used){orbTimer-=dt;if(orbTimer<=0)spawnOrb();}
+  // orb pickup + global 5-minute heal cooldown (persists across rooms)
+  if(healCD>0){healCD-=dt;if(healCD<=0&&!orb)spawnOrb();}
+  if(orb&&!orb.used){orb.t+=dt;if(player.hp<player.maxhp*0.95&&Math.hypot(orb.x-player.x,orb.y-player.y)<30){orb.used=true;orb=null;healCD=300;const heal=Math.round(player.maxhp*0.55);player.hp=Math.min(player.maxhp,player.hp+heal);AudioFX.sfx.heal();floaters.push({x:player.x,y:player.y-32,txt:'+'+heal+' MORALE',life:1.1,vy:-32,col:'#9bb04f'});}}
 
   // combat — manual aim (mouse / right stick), fire on input, light auto-aim assist
   let aim=player.aim, fire=false;

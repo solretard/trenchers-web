@@ -481,7 +481,11 @@ function onState(m){
   }
   for(const id in buffers){if(!seen[id])delete buffers[id];}
   bulletSet={list:m.bullets||[],t:now};
+  pickupSet=m.pickups||[];
+  bombSet=m.bombs||[];
+  blastSet=m.blasts||[];
 }
+let pickupSet=[], bombSet=[], blastSet=[];
 
 let inputTimer=null;
 function startInputLoop(){
@@ -527,7 +531,13 @@ function startInputLoop(){
     myAim=aim;
     myFiring=fire;
     inputSeq++;
-    ws.send(JSON.stringify({t:'input',seq:inputSeq,dx,dy,aim,fire}));
+    // bomb: fire when Enter/Space pressed and off cooldown (edge-triggered)
+    let bomb=false;
+    const me=lastPlayers.find(p=>p.id===myId);
+    const cd=me?(me.bombcd||0):0;
+    if(bombWanted && cd<=0){ bomb=true; }
+    bombWanted=false;
+    ws.send(JSON.stringify({t:'input',seq:inputSeq,dx,dy,aim,fire,bomb}));
     // ----- client-side prediction: move myself now (with cover collision) -----
     if(pred&&myAlive){
       let nx=dx,ny=dy;const mg=Math.hypot(nx,ny);if(mg>1){nx/=mg;ny/=mg;}
@@ -541,7 +551,9 @@ function startInputLoop(){
   },SEND_MS);
 }
 
-addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key===' ')e.preventDefault();});
+let bombWanted=false;
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key===' ')e.preventDefault();
+  if(e.key==='Enter'||e.key===' ')bombWanted=true;});
 addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 function loc(e){const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
 function worldFromLoc(p){return{x:(p.x-cv.width/2)/zoom+camX,y:(p.y-cv.height/2)/zoom+camY};}
@@ -697,15 +709,54 @@ function draw(){
   for(const b of localBullets){ drawTracer(b.x,b.y,b.vx,b.vy,b.fac); }
   ctx.shadowBlur=0;
 
-  const rt=now-INTERP_DELAY;
+  // ---- pickups on the ground (shield / heal / gun) ----
+  for(const pk of pickupSet){
+    const px=sx(pk.x), py=sy(pk.y), bob=Math.sin(now/300+pk.id)*4*zoom;
+    const col = pk.kind==='shield'?'#39c6e0' : pk.kind==='heal'?'#9bb04f' : '#e7c87e';
+    const ic  = pk.kind==='shield'?'🛡' : pk.kind==='heal'?'✚' : '★';
+    ctx.save(); ctx.translate(px,py+bob);
+    ctx.shadowColor=col; ctx.shadowBlur=16;
+    ctx.fillStyle='rgba(16,15,10,0.85)'; ctx.beginPath(); ctx.arc(0,0,14*zoom,0,6.29); ctx.fill();
+    ctx.strokeStyle=col; ctx.lineWidth=2.5*zoom; ctx.stroke();
+    ctx.shadowBlur=0; ctx.fillStyle=col; ctx.font=(15*zoom).toFixed(0)+'px Arial';
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(ic,0,1*zoom);
+    ctx.restore();
+  }
+  // ---- bombs in flight ----
+  for(const b of bombSet){
+    const bx=sx(b.x), by=sy(b.y);
+    ctx.save(); ctx.shadowColor='#ff5a26'; ctx.shadowBlur=12;
+    ctx.fillStyle='#1a1712'; ctx.beginPath(); ctx.arc(bx,by,7*zoom,0,6.29); ctx.fill();
+    ctx.fillStyle=(Math.floor(now/120)%2?'#ff5a26':'#e7c87e'); ctx.beginPath(); ctx.arc(bx,by-6*zoom,2.5*zoom,0,6.29); ctx.fill();
+    ctx.restore();
+  }
+  // ---- explosions ----
+  for(const bl of blastSet){
+    const bx=sx(bl.x), by=sy(bl.y);
+    ctx.save(); ctx.globalAlpha=0.6; ctx.fillStyle='#ff8340'; ctx.shadowColor='#ff5a26'; ctx.shadowBlur=30;
+    ctx.beginPath(); ctx.arc(bx,by,70*zoom,0,6.29); ctx.fill();
+    ctx.globalAlpha=0.9; ctx.fillStyle='#ffd27a'; ctx.beginPath(); ctx.arc(bx,by,40*zoom,0,6.29); ctx.fill();
+    ctx.restore();
+  }
+  ctx.shadowBlur=0;
+
   const byId={};for(const p of lastPlayers)byId[p.id]=p;
   // damage flash + shake when my hp drops
   const meNow=byId[myId];
   if(meNow){ if(meNow.hp<myHpPrev){shake=Math.min(11,shake+6);const df=document.getElementById('dmgflash');df.style.opacity='0.5';setTimeout(()=>{df.style.opacity='0';},90);} myHpPrev=meNow.hp; }
+  // shield/power aura helper
+  const aura=(wx,wy,alive,shield,power)=>{ if(!alive)return; const ax=sx(wx),ay=sy(wy);
+    if(shield){ ctx.save(); ctx.strokeStyle='rgba(57,198,224,'+(0.5+0.3*Math.sin(now/150)).toFixed(2)+')';
+      ctx.lineWidth=2.5*zoom; ctx.shadowColor='#39c6e0'; ctx.shadowBlur=14;
+      ctx.beginPath(); ctx.arc(ax,ay,24*zoom,0,6.29); ctx.stroke(); ctx.restore(); }
+    if(power){ ctx.save(); ctx.fillStyle='rgba(231,200,126,0.25)'; ctx.shadowColor='#e7c87e'; ctx.shadowBlur=12;
+      ctx.beginPath(); ctx.arc(ax,ay-4*zoom,20*zoom,0,6.29); ctx.fill(); ctx.restore(); }
+  };
   // other players (interpolated)
   for(const p of lastPlayers){
     if(p.id===myId)continue;
     const s=sampleBuffer(buffers[p.id]||[],rt)||{x:p.x,y:p.y,aim:p.aim};
+    aura(s.x,s.y,p.alive,p.shield,p.power);
     drawPlayer(s.x,s.y,s.aim,p.hp,p.alive,p.name,false,p.faction,p.tier,false);
   }
   // me (predicted position, instant local aim)
@@ -713,6 +764,7 @@ function draw(){
     const mp=byId[myId];
     const px=(pred?pred.x:mp.x), py=(pred?pred.y:mp.y);
     const aim=pred?myAim:mp.aim;
+    aura(px,py,mp.alive,mp.shield,mp.power);
     drawPlayer(px,py,aim,mp.hp,mp.alive,mp.name,true,mp.faction,mp.tier,myFiring&&mp.alive);
   }
   ctx.restore();   // end shake transform — UI below is drawn unshaken
@@ -749,6 +801,18 @@ function draw(){
   if(hasMouse&&!aimStick.active){
     const cx=sx(mouseW.x),cy=sy(mouseW.y);ctx.strokeStyle='rgba(231,200,126,.8)';ctx.lineWidth=1.5;
     ctx.beginPath();ctx.arc(cx,cy,9,0,6.3);ctx.moveTo(cx-13,cy);ctx.lineTo(cx-4,cy);ctx.moveTo(cx+4,cy);ctx.lineTo(cx+13,cy);ctx.moveTo(cx,cy-13);ctx.lineTo(cx,cy-4);ctx.moveTo(cx,cy+4);ctx.lineTo(cx,cy+13);ctx.stroke();
+  }
+
+  // ---- bomb cooldown indicator (bottom-center) ----
+  {
+    const me=lastPlayers.find(p=>p.id===myId);
+    const cd=me?(me.bombcd||0):0, ready=cd<=0;
+    const bw=cv.width, bh=cv.height;
+    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font='bold 13px Arial';
+    ctx.fillStyle=ready?'rgba(255,90,38,0.95)':'rgba(154,144,121,0.6)';
+    ctx.fillText(ready?'💣 BOMB READY — ENTER/SPACE':('💣 '+cd.toFixed(0)+'s'), bw/2, bh-18);
+    ctx.restore();
   }
 
   requestAnimationFrame(draw);

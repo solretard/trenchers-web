@@ -671,6 +671,7 @@ function drawPlayer(wx,wy,aim,hp,alive,name,me,faction,tier,firing){
 }
 
 function draw(){
+ try{
   ctx.clearRect(0,0,cv.width,cv.height);
   ctx.imageSmoothingEnabled=false;   // keep pixel art crisp every frame
   // ---- camera follows local player ----
@@ -816,6 +817,7 @@ function draw(){
     ctx.restore();
   }
 
+  } catch(e){ if(!window.__drawErr){ console.error('DRAW ERROR (first only):', e); window.__drawErr = e; } }
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);

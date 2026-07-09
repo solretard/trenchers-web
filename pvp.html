@@ -553,9 +553,9 @@ function startInputLoop(){
 }
 
 let bombWanted=false;
-addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key===' ')e.preventDefault();
+addEventListener('keydown',e=>{if(!e.key)return;keys[e.key.toLowerCase()]=true;if(e.key===' ')e.preventDefault();
   if(e.key==='Enter'||e.key===' ')bombWanted=true;});
-addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+addEventListener('keyup',e=>{if(!e.key)return;keys[e.key.toLowerCase()]=false;});
 function loc(e){const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
 function worldFromLoc(p){return{x:(p.x-cv.width/2)/zoom+camX,y:(p.y-cv.height/2)/zoom+camY};}
 

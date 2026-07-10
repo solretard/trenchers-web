@@ -201,27 +201,13 @@
 })();
 
 // ===== music bed (starts on first tap; browsers block autoplay) =====
+// ===== theme song (replaces the old synth beat) =====
 const AudioFX=(()=>{
-  let ac=null,musG=null,muted=false,started=false,step=0;
-  const bass=[55,55,49,58,55,55,62,49];
-  function init(){ if(started)return; try{
-    ac=new (window.AudioContext||window.webkitAudioContext)();
-    musG=ac.createGain();musG.gain.value=0.30;musG.connect(ac.destination);
-    started=true;schedule();
-  }catch(e){} }
-  function resume(){ try{ if(ac&&ac.state==='suspended')ac.resume(); }catch(e){} }
-  const OFFSET=0.235;   // half-step delay — interlocks into a new beat
-  function hit(at,g){
-    const ko=ac.createOscillator(),kg=ac.createGain();ko.type='sine';ko.frequency.setValueAtTime(115,at);ko.frequency.exponentialRampToValueAtTime(42,at+0.12);kg.gain.setValueAtTime(0.4*g,at);kg.gain.exponentialRampToValueAtTime(0.001,at+0.18);ko.connect(kg);kg.connect(musG);ko.start(at);ko.stop(at+0.2);
-    if(step%2===0){const bo=ac.createOscillator(),bg=ac.createGain(),bf=ac.createBiquadFilter();bo.type='sawtooth';bo.frequency.value=bass[(step/2)%bass.length];bf.type='lowpass';bf.frequency.value=320;bg.gain.setValueAtTime(0.0001,at);bg.gain.linearRampToValueAtTime(0.1*g,at+0.05);bg.gain.exponentialRampToValueAtTime(0.001,at+0.55);bo.connect(bf);bf.connect(bg);bg.connect(musG);bo.start(at);bo.stop(at+0.6);}
-  }
-  function schedule(){ if(!ac)return; try{
-    const t=ac.currentTime;
-    hit(t,1);
-    hit(t+OFFSET,0.6);
-    step++;
-  }catch(e){} setTimeout(schedule,470); }
-  function toggle(){ muted=!muted; try{ if(musG)musG.gain.value=muted?0:0.30; }catch(e){} return muted; }
+  const a=new Audio('trenchers_theme_song.mp3'); a.loop=true; a.preload='auto'; a.volume=0.55;
+  let muted=false, started=false;
+  function init(){ if(started)return; started=true; a.play().catch(()=>{}); }
+  function resume(){ try{ a.play().catch(()=>{}); }catch(e){} }
+  function toggle(){ muted=!muted; a.muted=muted; return muted; }
   return {init,resume,toggle};
 })();
 ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,function _a(){AudioFX.init();AudioFX.resume();},{once:true}));

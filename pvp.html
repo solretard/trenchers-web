@@ -655,7 +655,7 @@ function muzzle(x,y,aim,tier){
   ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(mx,my,(2+t*0.4)*zoom,0,6.3);ctx.fill();
 }
 function drawPlayer(wx,wy,aim,hp,alive,name,me,faction,tier,firing){
-  const x=sx(wx),y=sy(wy),s=SP_SCALE*zoom,hero=HERO[faction]||HERO['—'];
+  const x=sx(wx),y=sy(wy),s=SP_SCALE*zoom,hero=HERO[faction]||HERO['DIAMONDS']||Object.values(HERO)[0];
   const col=FCOLOR[faction]||'#e8e0cc';
   ctx.fillStyle='rgba(0,0,0,0.32)';ctx.beginPath();ctx.ellipse(x,y+15*zoom,13*zoom,5*zoom,0,0,6.3);ctx.fill();
   if(!alive){

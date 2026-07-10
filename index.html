@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TRENCHERS</title>
-<link rel="icon" type="image/png" href="favicon.png">
 <style>
  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Space+Mono&display=swap');
  *{margin:0;padding:0;box-sizing:border-box;}
@@ -62,4 +61,18 @@ function loop(ts){if(!start)start=ts;const t=(ts-start)/1000;ctx.imageSmoothingE
  say(200,350,["ready to trench?","on XRPL 🫡"],t,3);
  say(338,406,["you bought the dip?","wagmi"],t,6);
  coin(t);emberFx(t);requestAnimationFrame(loop);}
+
+// ---- theme song (starts on first tap; carries into the game) ----
+const bgm=new Audio('trenchers_theme_song.mp3'); bgm.loop=true; bgm.volume=0.55;
+let bgmMuted=false;
+document.addEventListener('pointerdown',function _s(){ bgm.play().catch(()=>{}); },{once:true});
+</script>
+<div id="snd" style="position:fixed;top:14px;right:14px;z-index:5;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(16,15,10,.7);border:1px solid rgba(200,155,74,.4);color:#e7c87e;font-size:18px;cursor:pointer;user-select:none;">♪</div>
+<script>
+document.getElementById('snd').addEventListener('click',(e)=>{
+  e.stopPropagation();
+  if(bgm.paused){ bgm.play().catch(()=>{}); }
+  bgmMuted=!bgmMuted; bgm.muted=bgmMuted;
+  const b=document.getElementById('snd'); b.textContent=bgmMuted?'♪̸':'♪'; b.style.color=bgmMuted?'#9a9079':'#e7c87e';
+});
 </script></body></html>

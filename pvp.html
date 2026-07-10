@@ -744,6 +744,7 @@ function draw(){
   }
   ctx.shadowBlur=0;
 
+  const rt=now-INTERP_DELAY;
   const byId={};for(const p of lastPlayers)byId[p.id]=p;
   // damage flash + shake when my hp drops
   const meNow=byId[myId];

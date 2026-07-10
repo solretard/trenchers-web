@@ -228,7 +228,7 @@ const AudioFX=(()=>{
     ac=new (window.AudioContext||window.webkitAudioContext)();
     sfxG=ac.createGain();sfxG.gain.value=0.5;sfxG.connect(ac.destination);
     musG=ac.createGain();musG.gain.value=0.32;musG.connect(ac.destination);
-    started=true;schedule();
+    started=true;   // synth music bed disabled — real song via BGM
   }catch(e){} }
   function resume(){ try{ if(ac&&ac.state==='suspended')ac.resume(); }catch(e){} }
   function tone(f,d,type,g,slide){ if(!ac||muted)return; try{const o=ac.createOscillator(),gn=ac.createGain();o.type=type||'square';o.frequency.value=f;if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),ac.currentTime+d);gn.gain.value=g||0.25;gn.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+d);o.connect(gn);gn.connect(sfxG);o.start();o.stop(ac.currentTime+d);}catch(e){} }
@@ -261,6 +261,18 @@ const AudioFX=(()=>{
   }catch(e){} mt=setTimeout(schedule,470); }
   function toggle(){ muted=!muted; try{ if(musG)musG.gain.value=muted?0:0.32; if(sfxG)sfxG.gain.value=muted?0:0.5; }catch(e){} if(muted&&'speechSynthesis'in window)speechSynthesis.cancel(); return muted; }
   return {init,resume,sfx,toggle,get muted(){return muted;}};
+})();
+
+// ===== background music: real song, ducks lower during gameplay =====
+const BGM=(()=>{
+  const a=new Audio('trenchers_theme_song.mp3'); a.loop=true; a.preload='auto';
+  let started=false, muted=false, inGame=false;
+  const VOL_MENU=0.55, VOL_PLAY=0.20;
+  function apply(){ a.volume = muted ? 0 : (inGame ? VOL_PLAY : VOL_MENU); }
+  function start(){ if(started)return; started=true; apply(); a.play().catch(()=>{}); }
+  function duck(playing){ if(playing===inGame)return; inGame=playing; apply(); }
+  function toggle(){ muted=!muted; apply(); return muted; }
+  return {start,duck,toggle,get muted(){return muted;}};
 })();
 let lastVoice=0;
 function say(text,pitch,rate){ try{
@@ -385,6 +397,7 @@ function enterRoom(d){
 }
 function startGame(cls){
   chosen=cls;const C=CLASSES[cls];state='playing';
+  BGM.duck(true);   // lower music during the run so SFX cut through
   runSession=null;
   if(BACKEND_URL){fetch(BACKEND_URL+'/session/start',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json()).then(d=>{runSession=d.session;}).catch(()=>{});}
   const hb=isHolder?1.25:1;   // NFT holder booster: +25% morale
@@ -688,8 +701,8 @@ function refreshHUD(){
 }
 document.getElementById('sellBtn').addEventListener('click',()=>sellHeld(false));
 document.getElementById('bombBtn').addEventListener('click',()=>throwBomb());
-document.getElementById('muteBtn').addEventListener('click',()=>{const m=AudioFX.toggle();document.getElementById('muteBtn').textContent=m?'♪̸':'♪';document.getElementById('muteBtn').style.color=m?'#9a9079':'#e7c87e';});
-function exitToMenu(){state='menu';document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');document.getElementById('exitBtn').classList.remove('on');document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');if('speechSynthesis'in window)speechSynthesis.cancel();}
+document.getElementById('muteBtn').addEventListener('click',()=>{const m=AudioFX.toggle();BGM.toggle();document.getElementById('muteBtn').textContent=m?'♪̸':'♪';document.getElementById('muteBtn').style.color=m?'#9a9079':'#e7c87e';});
+function exitToMenu(){state='menu';BGM.duck(false);document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');document.getElementById('exitBtn').classList.remove('on');document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');if('speechSynthesis'in window)speechSynthesis.cancel();}
 document.getElementById('exitBtn').addEventListener('click',exitToMenu);
 
 function verdict(){
@@ -787,7 +800,7 @@ buildCards();
 document.getElementById('guideBtn').addEventListener('click',()=>document.getElementById('guide').classList.add('on'));
 document.getElementById('guideX').addEventListener('click',()=>document.getElementById('guide').classList.remove('on'));
 document.getElementById('guide').addEventListener('click',e=>{if(e.target.id==='guide')document.getElementById('guide').classList.remove('on');});
-['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,function _a(){AudioFX.init();AudioFX.resume();},{once:true}));
+['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,function _a(){AudioFX.init();AudioFX.resume();BGM.start();},{once:true}));
 document.getElementById('btnAgain').addEventListener('click',()=>startGame(chosen));
 document.getElementById('submitRun').addEventListener('click',submitRun);
 document.getElementById('btnClass').addEventListener('click',()=>{state='menu';document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');});

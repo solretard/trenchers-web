@@ -249,7 +249,7 @@ const AudioFX=(()=>{
     ac=new (window.AudioContext||window.webkitAudioContext)();
     sfxG=ac.createGain();sfxG.gain.value=0.5;sfxG.connect(ac.destination);
     musG=ac.createGain();musG.gain.value=0.30;musG.connect(ac.destination);
-    started=true;schedule();
+    started=true;   // synth music bed disabled — real song plays via BGM below
   }catch(e){} }
   function resume(){ try{ if(ac&&ac.state==='suspended')ac.resume(); }catch(e){} }
   function tone(f,d,type,g,slide){ if(!ac||muted)return; try{const o=ac.createOscillator(),gn=ac.createGain();o.type=type||'square';o.frequency.value=f;if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),ac.currentTime+d);gn.gain.value=g||0.25;gn.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+d);o.connect(gn);gn.connect(sfxG);o.start();o.stop(ac.currentTime+d);}catch(e){} }
@@ -277,6 +277,18 @@ const AudioFX=(()=>{
   }catch(e){} mt=setTimeout(schedule,470); }
   function toggle(){ muted=!muted; try{ if(musG)musG.gain.value=muted?0:0.30; if(sfxG)sfxG.gain.value=muted?0:0.5; }catch(e){} return muted; }
   return {init,resume,sfx,toggle,get muted(){return muted;}};
+})();
+
+// ===== background music: real song, ducks lower during gameplay =====
+const BGM=(()=>{
+  const a=new Audio('trenchers_theme_song.mp3'); a.loop=true; a.preload='auto';
+  let started=false, muted=false, inGame=false;
+  const VOL_MENU=0.55, VOL_PLAY=0.20;   // quieter in-game so gunfire cuts through
+  function apply(){ a.volume = muted ? 0 : (inGame ? VOL_PLAY : VOL_MENU); }
+  function start(){ if(started)return; started=true; apply(); a.play().catch(()=>{}); }
+  function duck(playing){ if(playing===inGame)return; inGame=playing; apply(); }
+  function toggle(){ muted=!muted; apply(); return muted; }
+  return {start,duck,toggle,get muted(){return muted;}};
 })();
 const RELEASE_ANGLE=0.55;          // wider cone before the lock lets go (hysteresis)
 let aimLockId=null;                // currently locked target id (sticky)
@@ -408,8 +420,8 @@ document.getElementById('market').addEventListener('click',e=>{
   if(t&&!t.rugged)ape(s);
 });
 setInterval(renderMarket,200);
-['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,function _a(){AudioFX.init();AudioFX.resume();},{once:true}));
-document.getElementById('muteBtn').addEventListener('click',()=>{AudioFX.init();const m=AudioFX.toggle();const b=document.getElementById('muteBtn');b.textContent=m?'♪̸':'♪';b.style.color=m?'#9a9079':'#e7c87e';});
+['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,function _a(){AudioFX.init();AudioFX.resume();BGM.start();},{once:true}));
+document.getElementById('muteBtn').addEventListener('click',()=>{AudioFX.init();const m=AudioFX.toggle();BGM.toggle();const b=document.getElementById('muteBtn');b.textContent=m?'♪̸':'♪';b.style.color=m?'#9a9079':'#e7c87e';});
 
 // ---- invite links ----
 function inviteLink(){return location.origin+location.pathname+'?room='+encodeURIComponent(roomCode);}
@@ -452,6 +464,7 @@ function onState(m){
   if(m.phase==='over'&&meta.phase!=='over')AudioFX.sfx.win();
 
   meta={phase:m.phase,winner:m.winner,target:m.target};
+  BGM.duck(meta.phase==='play');   // lower music volume during live combat
   lastStateAt=performance.now();
   lastPlayers=m.players;
   market=m.market||[];

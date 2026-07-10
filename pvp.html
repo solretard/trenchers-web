@@ -822,25 +822,6 @@ function draw(){
 
   } catch(e){ if(!window.__drawErr){ console.error('DRAW ERROR (first only):', e); window.__drawErr = e; } }
 
-  // ---- TEMP DEBUG readout (remove later) ----
-  try{
-    const age=lastStateAt?((performance.now()-lastStateAt)/1000).toFixed(1):'never';
-    const myp=(typeof myId!=='undefined')&&lastPlayers?lastPlayers.find(p=>p.id===myId):null;
-    ctx.save();ctx.font='bold 13px monospace';ctx.textAlign='left';ctx.textBaseline='top';
-    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(6,6,250,110);
-    ctx.fillStyle='#39c6e0';
-    const L=[
-      'CONN: '+(typeof connected!=='undefined'?connected:'?'),
-      'STATE: '+age+'s ago',
-      'PHASE: '+(meta?meta.phase:'?'),
-      'PLAYERS: '+(lastPlayers?lastPlayers.length:0),
-      'PRED: '+(pred?'yes':'NO'),
-      'ALIVE: '+(myp?myp.alive:'?'),
-    ];
-    L.forEach((t,i)=>ctx.fillText(t,12,12+i*17));
-    ctx.restore();
-  }catch(_){}
-
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);

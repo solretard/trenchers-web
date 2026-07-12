@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRENCHERS — Your Record</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --mud-900:#100f0a; --mud2:#171510; --mud3:#1f1c15;
+    --brass:#c89b4a; --brass-br:#e7c87e;
+    --bone:#e8e0cc; --bone-dim:#9a9079;
+    --flare:#ff5a26; --gain:#9bb04f; --cyan:#39c6e0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:var(--mud-900); color:var(--bone);
+    font-family:'Oswald',sans-serif; min-height:100vh;
+    background-image:radial-gradient(circle at 50% 0%, #1b1913 0%, #100f0a 60%);
+    padding:24px 16px 60px;
+  }
+  .wrap{max-width:760px;margin:0 auto;}
+
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px;}
+  .back{font-family:'Space Mono',monospace;font-size:12px;color:var(--bone-dim);text-decoration:none;letter-spacing:.12em;
+    border:1px solid rgba(200,155,74,.3);padding:8px 14px;}
+  .back:hover{color:var(--brass-br);border-color:var(--brass);}
+
+  h1{font-size:clamp(26px,5vw,38px);letter-spacing:.1em;font-weight:700;}
+  h1 .b{color:var(--brass);}
+  .sub{font-family:'Space Mono',monospace;font-size:11px;color:var(--bone-dim);letter-spacing:.2em;text-transform:uppercase;margin-top:4px;}
+
+  .wallet{font-family:'Space Mono',monospace;font-size:12px;color:var(--brass-br);margin-top:14px;
+    background:var(--mud2);border:1px solid rgba(200,155,74,.25);padding:10px 14px;display:inline-block;}
+
+  .panel{background:var(--mud2);border:1px solid rgba(200,155,74,.22);padding:20px;margin-top:18px;}
+  .panel h2{font-size:13px;letter-spacing:.2em;color:var(--brass);text-transform:uppercase;margin-bottom:14px;font-weight:600;}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;}
+  .stat{background:var(--mud3);border:1px solid rgba(200,155,74,.15);padding:14px;}
+  .stat .k{font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);letter-spacing:.16em;text-transform:uppercase;}
+  .stat .v{font-size:26px;font-weight:700;color:var(--bone);margin-top:6px;line-height:1;}
+  .stat .v.brass{color:var(--brass-br);}
+  .stat .v.gain{color:var(--gain);}
+  .stat .n{font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);margin-top:5px;}
+
+  /* airdrop bar */
+  .bar-wrap{margin-top:8px;}
+  .bar{height:22px;background:var(--mud3);border:1px solid rgba(200,155,74,.25);position:relative;overflow:hidden;}
+  .bar-fill{height:100%;background:linear-gradient(90deg,var(--brass),var(--flare));width:0%;transition:width .8s cubic-bezier(.2,.8,.2,1);}
+  .bar-label{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);margin-top:6px;}
+  .big-num{font-size:34px;font-weight:700;color:var(--brass-br);line-height:1;}
+  .big-sub{font-family:'Space Mono',monospace;font-size:11px;color:var(--bone-dim);margin-top:6px;line-height:1.6;}
+
+  .rank-line{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;}
+  .rank-num{font-size:30px;font-weight:700;color:var(--brass-br);}
+  .rank-of{font-family:'Space Mono',monospace;font-size:12px;color:var(--bone-dim);}
+  .out{color:var(--flare);font-family:'Space Mono',monospace;font-size:12px;}
+
+  .formula{font-family:'Space Mono',monospace;font-size:11px;color:var(--bone-dim);line-height:1.9;}
+  .formula b{color:var(--brass-br);}
+
+  .msg{text-align:center;padding:50px 20px;color:var(--bone-dim);font-family:'Space Mono',monospace;font-size:13px;line-height:1.9;}
+  .msg a{color:var(--brass-br);}
+  .hidden{display:none;}
+  .mult-badge{display:inline-block;background:rgba(155,176,79,.15);border:1px solid var(--gain);color:var(--gain);
+    font-family:'Space Mono',monospace;font-size:11px;padding:3px 9px;margin-left:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="back" href="home.html">← BACK</a>
+  </div>
+
+  <h1>YOUR <span class="b">RECORD</span></h1>
+  <div class="sub">Trenchers · XP &amp; weekly airdrop</div>
+  <div id="walletBox" class="wallet hidden"></div>
+
+  <!-- not connected -->
+  <div id="noWallet" class="msg">
+    Connect your wallet on the <a href="home.html">home page</a> to see your record.<br>
+    Your scars, PvP wins and XP are tracked against your wallet.
+  </div>
+
+  <!-- loading -->
+  <div id="loading" class="msg hidden">Reading your record from the trenches…</div>
+
+  <div id="content" class="hidden">
+
+    <!-- this week -->
+    <div class="panel">
+      <h2>This Week</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="k">XP this week</div>
+          <div class="v brass" id="wkXp">0</div>
+          <div class="n" id="wkBreak">—</div>
+        </div>
+        <div class="stat">
+          <div class="k">Scars</div>
+          <div class="v" id="wkScars">0</div>
+          <div class="n">× 0.3 XP each</div>
+        </div>
+        <div class="stat">
+          <div class="k">PvP wins</div>
+          <div class="v" id="wkWins">0</div>
+          <div class="n">× 100 XP each</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- airdrop -->
+    <div class="panel">
+      <h2>Weekly Airdrop Projection</h2>
+      <div class="big-num" id="dropPct">0.0000%</div>
+      <div class="big-sub" id="dropNote">of total supply, if the week ended now</div>
+
+      <div class="bar-wrap">
+        <div class="bar"><div class="bar-fill" id="dropBar"></div></div>
+        <div class="bar-label">
+          <span id="shareTxt">0% of the pool</span>
+          <span id="poolTxt">pool: 0 XP</span>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="rank-line">
+          <span class="rank-num" id="rankNum">—</span>
+          <span class="rank-of" id="rankOf">this week</span>
+        </div>
+        <div id="outNote" class="out hidden">Not in the top 30 yet — keep digging.</div>
+      </div>
+    </div>
+
+    <!-- lifetime -->
+    <div class="panel">
+      <h2>All Time</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="k">Total scars</div>
+          <div class="v" id="ltScars">0</div>
+        </div>
+        <div class="stat">
+          <div class="k">Total PvP wins</div>
+          <div class="v" id="ltWins">0</div>
+        </div>
+        <div class="stat">
+          <div class="k">Runs</div>
+          <div class="v" id="ltRuns">0</div>
+        </div>
+        <div class="stat">
+          <div class="k">Lifetime XP</div>
+          <div class="v brass" id="ltXp">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- nft -->
+    <div class="panel">
+      <h2>NFT Bonus</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="k">Trenchers NFTs held</div>
+          <div class="v gain" id="nftCount">0</div>
+          <div class="n">+10% XP each</div>
+        </div>
+        <div class="stat">
+          <div class="k">Your XP multiplier</div>
+          <div class="v gain" id="multVal">1.0×</div>
+          <div class="n">capped at 2.0× (10 NFTs)</div>
+        </div>
+      </div>
+      <div class="formula" style="margin-top:14px;">
+        XP = (scars × <b>0.3</b> + PvP wins × <b>100</b>) × <b>NFT multiplier</b><br>
+        Each week, the top <b>30</b> share <b>1.67%</b> of supply, split by that week's XP.<br>
+        Weekly XP resets — <b>you have to play to earn</b>.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = "https://web-production-e7758.up.railway.app";
+
+function connectedWallet(){
+  try{ const w=JSON.parse(localStorage.getItem('trench_wallet')||'null'); return (w&&w.addr)?w.addr:null; }
+  catch(e){ return null; }
+}
+const short = a => a.slice(0,8)+'…'+a.slice(-6);
+const fmt = n => (Math.round(n*100)/100).toLocaleString();
+
+async function load(){
+  const wallet = connectedWallet();
+  if(!wallet){ document.getElementById('noWallet').classList.remove('hidden'); return; }
+
+  document.getElementById('noWallet').classList.add('hidden');
+  document.getElementById('loading').classList.remove('hidden');
+  const wb = document.getElementById('walletBox');
+  wb.textContent = '⛓ ' + short(wallet);
+  wb.classList.remove('hidden');
+
+  try{
+    const r = await fetch(API + '/profile/' + wallet);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+
+    // this week
+    document.getElementById('wkXp').textContent    = fmt(d.week_stats.xp);
+    document.getElementById('wkScars').textContent = fmt(d.week_stats.scars);
+    document.getElementById('wkWins').textContent  = fmt(d.week_stats.pvp_wins);
+    document.getElementById('wkBreak').textContent =
+      d.multiplier > 1 ? ('includes ' + d.multiplier + '× NFT bonus') : 'no NFT bonus yet';
+
+    // airdrop
+    const pct   = d.airdrop.your_projected_pct_of_supply || 0;
+    const share = d.airdrop.your_share_of_pool || 0;
+    document.getElementById('dropPct').textContent = pct.toFixed(4) + '%';
+    document.getElementById('dropNote').textContent =
+      'of total supply — your cut of this week\u2019s ' + d.airdrop.weekly_pct_of_supply + '% if the week ended now';
+    document.getElementById('dropBar').style.width = Math.min(100, share*100).toFixed(2) + '%';
+    document.getElementById('shareTxt').textContent = (share*100).toFixed(2) + '% of the pool';
+    document.getElementById('poolTxt').textContent  = 'pool: ' + fmt(d.airdrop.pool_xp) + ' XP';
+
+    // rank
+    if(d.rank){
+      document.getElementById('rankNum').textContent = '#' + d.rank;
+      document.getElementById('rankOf').textContent  = 'of top ' + d.airdrop.top_n + ' this week';
+    }else{
+      document.getElementById('rankNum').textContent = '—';
+      document.getElementById('rankOf').textContent  = 'unranked this week';
+      document.getElementById('outNote').classList.remove('hidden');
+    }
+
+    // lifetime
+    document.getElementById('ltScars').textContent = fmt(d.lifetime.scars);
+    document.getElementById('ltWins').textContent  = fmt(d.lifetime.pvp_wins);
+    document.getElementById('ltRuns').textContent  = fmt(d.lifetime.runs);
+    document.getElementById('ltXp').textContent    = fmt(d.lifetime.xp);
+
+    // nft
+    document.getElementById('nftCount').textContent = d.nfts;
+    document.getElementById('multVal').textContent  = d.multiplier.toFixed(1) + '×';
+
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('content').classList.remove('hidden');
+  }catch(e){
+    document.getElementById('loading').textContent =
+      'Could not load your record right now. Try again in a moment.';
+  }
+}
+load();
+</script>
+</body>
+</html>

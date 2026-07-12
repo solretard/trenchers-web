@@ -192,6 +192,8 @@ function sx(wx){return (wx-camX)*zoom+cv.width/2;}
 function sy(wy){return (wy-camY)*zoom+cv.height/2;}
 
 let ws=null,myId=null,connected=false;
+// the wallet the player connected on the home page (shared via localStorage)
+function connectedWallet(){try{const w=JSON.parse(localStorage.getItem('trench_wallet')||'null');return (w&&w.addr)?w.addr:null;}catch(e){return null;}}
 let meta={phase:'play',winner:null,target:5};
 let lastPlayers=[];           // newest authoritative player list (scoreboard, hp, alive)
 let market=[];                // [{sym,mcap,tier,rugged}]
@@ -334,7 +336,7 @@ function join(){
   const url=REALTIME_URL.replace(/\/$/,'')+'/ws/'+encodeURIComponent(room);
   setStatus('connecting…',false);
   try{ws=new WebSocket(url);}catch(e){err.textContent='bad server URL';return;}
-  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('loadout').classList.remove('on');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();if(name)ws.send(JSON.stringify({t:'name',name}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
+  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('loadout').classList.remove('on');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
   ws.onmessage=(ev)=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
     if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();}
     else if(m.t==='state'){onState(m);}

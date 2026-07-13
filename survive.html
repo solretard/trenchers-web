@@ -21,6 +21,13 @@
   #market{position:absolute;top:0;left:0;right:64px;z-index:7;display:none;gap:5px;padding:7px 8px;overflow-x:auto;scrollbar-width:none;pointer-events:auto;background:linear-gradient(180deg,rgba(12,11,7,.92),rgba(12,11,7,0));}
   #market::-webkit-scrollbar{display:none;}
   #market.on{display:flex;}
+  /* MARKET toggle — keeps tokens off the screen on mobile until you tap it */
+  #marketTab{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:8;cursor:pointer;
+    font-family:'Oswald';font-weight:700;letter-spacing:2px;font-size:12px;color:var(--brass-br);
+    background:linear-gradient(180deg,rgba(33,30,21,.95),rgba(16,15,10,.95));
+    border:1px solid rgba(200,155,74,.35);padding:7px 16px;display:none;user-select:none;}
+  #marketTab.show{display:block;}
+  #marketTab.open{color:var(--flare);border-color:rgba(255,90,38,.5);}
   .chip{flex:0 0 auto;min-width:84px;cursor:pointer;padding:5px 8px;background:linear-gradient(180deg,rgba(33,30,21,.95),rgba(16,15,10,.95));border:1px solid rgba(200,155,74,.28);transition:transform .1s;position:relative;}
   .chip:active{transform:scale(.96);}
   .chip.held{border-color:var(--brass-br);box-shadow:0 0 14px rgba(200,155,74,.35);}
@@ -119,6 +126,7 @@
   <div id="vig"></div>
   <div id="dmgflash"></div>
   <div id="market"></div>
+  <div id="marketTab">⚔ MARKET</div>
   <div id="muteBtn">♪</div>
   <div id="exitBtn">EXIT</div>
 
@@ -331,7 +339,10 @@ function tickMarket(){
 function apeToken(idx){const t=market[idx];if(!t||!t.alive||t.rugged)return;if(held&&held.ticker===t.ticker)return;
   if(held){ if(held.pendingRug)bailedOnRug++; sellHeld(true); apes++; }
   held={ticker:t.ticker,entryMc:t.mc,pendingRug:false};
-  AudioFX.sfx.shoot();floaters.push({x:player.x,y:player.y-32,txt:'APED '+t.ticker,life:1,vy:-30,col:'#e7c87e'});refreshHUD();}
+  AudioFX.sfx.shoot();floaters.push({x:player.x,y:player.y-32,txt:'APED '+t.ticker,life:1,vy:-30,col:'#e7c87e'});refreshHUD();
+  // close the market once you've picked — keeps the screen clear mid-fight
+  const mEl=document.getElementById('market'),mTab=document.getElementById('marketTab');
+  if(mEl&&mTab){mEl.classList.remove('on');mTab.classList.remove('open');mTab.textContent='⚔ MARKET';}}
 function sellHeld(silent){if(!held)return;const t=curHeldToken();if(t){const profit=t.mc-held.entryMc;if(profit>0){const s=Math.max(1,Math.round(profit/2000));scars+=s;sells++;if(!silent)floaters.push({x:player.x,y:player.y-32,txt:'+'+s+' SOLD',life:1,vy:-34,col:'#9bb04f'});}else{lossSells++;sells++;}}
   if(!silent&&held.pendingRug)bailedOnRug++;
   held=null;refreshHUD();}
@@ -340,10 +351,17 @@ function devRugHeld(){const t=curHeldToken();if(!t||t.rugged)return;t.fate='rug'
 
 /* ===================== STATE ===================== */
 const TERR=[{key:'bear',name:'BEAR FRONT',vil:'BEAR'},{key:'rugger',name:"RUGGERS' TERRITORY",vil:'DEV RUGGER'},{key:'rbro',name:'RUGGED BRO TERRITORY',vil:'RUGGED BRO'}];
-let state='menu',player=null,bears=[],bullets=[],parts=[],floaters=[],orb=null,bombs=[],blasts=[];
+let state='menu',player=null,bears=[],bullets=[],ebullets=[],parts=[],floaters=[],orb=null,bombs=[],blasts=[];
 let chosen='aper',elapsed=0,scars=0,kills=0,spawnTimer=0,fireTimer=0,meleeTimer=0,shake=0,dmgFlash=0,sessionBest=0;
 let depth=1,territory='bear',roomTime=0,doorCD=0,fadeA=0,depthMax=1,roomScarBase=0,orbTimer=0,healCD=0;
 const MELEE_RANGE=54,MELEE_CD=0.42,MELEE_DMG=24,BLAST_RADIUS=98,BOMB_DMG=95,BOMB_KILLS=10;
+// --- Dev Ruggers: ranged shooters (weak bullets, so they stay killable) ---
+const RUG_RANGE=210;        // preferred firing distance
+const RUG_FIRE_CD=1.15;     // seconds between shots
+const RUG_BULLET_SPD=250;   // slow enough to dodge
+const RUG_BULLET_DMG=6;     // weak — chip damage, not burst
+const RUG_SPREAD=0.16;      // aim wobble (radians)
+const RUG_CONTACT=8;        // small bump damage if they touch you
 let heldThrough=0,heldToZero=0,bailedOnRug=0,sells=0,lossSells=0,apes=0,closeKills=0,farKills=0;
 const keys={};const SCALE=3.2;
 let hasMouse=false,mouseX=0,mouseY=0,mouseFire=false;
@@ -382,7 +400,7 @@ function drawCover(){for(const c of cover){
 
 function enterRoom(d){
   depth=d;depthMax=Math.max(depthMax,d);const T=TERR[(d-1)%TERR.length];territory=T.key;roomTime=0;doorCD=1.3;fadeA=1;
-  bears.length=0;bullets.length=0;
+  bears.length=0;bullets.length=0;ebullets.length=0;
   player.x=W/2;player.y=H/2;
   genCover();
   player.hp=Math.min(player.maxhp,Math.max(player.hp,Math.round(player.maxhp*0.75)));player.invuln=3.2;doorWasOpen=false;orbTimer=0;
@@ -403,7 +421,7 @@ function startGame(cls){
   const hb=isHolder?1.25:1;   // NFT holder booster: +25% morale
   player={x:W/2,y:H/2,hp:Math.round(C.maxHP*hb),maxhp:Math.round(C.maxHP*hb),hitFlash:0,invuln:0,face:1,bob:0,muzzle:0,aim:0,swing:0,bombCharge:0};
   genCover();
-  bears.length=0;bullets.length=0;parts.length=0;floaters.length=0;market.length=0;held=null;orb=null;bombs.length=0;blasts.length=0;
+  bears.length=0;bullets.length=0;ebullets.length=0;parts.length=0;floaters.length=0;market.length=0;held=null;orb=null;bombs.length=0;blasts.length=0;
   for(let i=0;i<6;i++)spawnToken();
   elapsed=0;scars=0;kills=0;spawnTimer=2.4;fireTimer=0;meleeTimer=0;shake=0;dmgFlash=0;tickAcc=0;
   depth=1;depthMax=1;territory='bear';roomTime=0;doorCD=1.3;fadeA=0.8;doorWasOpen=false;healCD=0;
@@ -412,7 +430,7 @@ function startGame(cls){
   spawnOrb();
   document.getElementById('terrName').textContent=TERR[0].name;document.getElementById('depVal').textContent='DEPTH 1';
   document.getElementById('menu').classList.add('hidden');document.getElementById('gameover').classList.add('hidden');
-  document.getElementById('hud').classList.add('on');document.getElementById('market').classList.add('on');document.getElementById('exitBtn').classList.add('on');
+  document.getElementById('hud').classList.add('on');document.getElementById('marketTab').classList.add('show');document.getElementById('exitBtn').classList.add('on');
   document.getElementById('classTag').textContent=C.tag;
   AudioFX.init();AudioFX.resume();
   if(isHolder){floaters.push({x:W/2,y:H/2-40,txt:'⛓ HOLDER BOOST',life:2.2,vy:-18,col:'#e7c87e'});}
@@ -423,7 +441,7 @@ function spawnEnemy(){
   const p=edgePos();const dm=1+(depth-1)*0.4,sm=1+(depth-1)*0.12,gm=1+(depth-1)*0.2;
   if(territory==='bear'){let type='grunt',hp=30,spd=44,sc=1,dmg=10;const r=Math.random();if(r>0.86){type='heavy';hp=95;spd=30;sc=1.4;dmg=20;}else if(r>0.6){type='fast';hp=18;spd=86;sc=0.78;dmg=8;}
     bears.push({kind:'bear',type,x:p.x,y:p.y,hp:Math.round(hp*dm),maxhp:Math.round(hp*dm),spd:spd*sm,sc,dmg:Math.round(dmg*gm),hitFlash:0,bob:Math.random()*6.3,knock:{x:0,y:0},st:'walk',stT:0,lungeCD:2+Math.random()*2.5,lvx:0,lvy:0});}
-  else if(territory==='rugger'){const hp=Math.round(46*dm);bears.push({kind:'rugger',x:p.x,y:p.y,hp,maxhp:hp,spd:72*sm,sc:1,dmg:0,hitFlash:0,bob:Math.random()*6.3,knock:{x:0,y:0},st:'approach',chan:0,leaveT:1.6,leaveA:0});}
+  else if(territory==='rugger'){const hp=Math.round(58*dm);bears.push({kind:'rugger',x:p.x,y:p.y,hp,maxhp:hp,spd:58*sm,sc:1.1,dmg:0,hitFlash:0,bob:Math.random()*6.3,knock:{x:0,y:0},shotCD:0.6+Math.random()*0.8,strafe:Math.random()<0.5?1:-1});}
   else {const hp=Math.round(34*dm);bears.push({kind:'rbro',x:p.x,y:p.y,hp,maxhp:hp,spd:72*sm,sc:1,dmg:Math.round(8*gm),hitFlash:0,bob:Math.random()*6.3,knock:{x:0,y:0},fleeing:false,stolen:0,greeted:false});}
 }
 
@@ -503,6 +521,21 @@ function update(dt){
     for(const b of bears){if(bl.hit.includes(b))continue;const rr=12*b.sc+5;if((b.x-bl.x)**2+(b.y-bl.y)**2<rr*rr){b.hp-=bl.dmg;b.hitFlash=0.09;bl.hit.push(b);b.knock.x+=Math.cos(bl.ang)*110;b.knock.y+=Math.sin(bl.ang)*110;AudioFX.sfx.hit();for(let p=0;p<4;p++)parts.push({x:bl.x,y:bl.y,vx:(Math.random()-.5)*180,vy:(Math.random()-.5)*180,life:0.22,col:'#7a1f16',sz:2});if(bl.pierce>0)bl.pierce--;else{bullets.splice(i,1);}break;}}
   }
 
+  // enemy bullets (Dev Ruggers) — weak, dodgeable, blocked by cover
+  for(let i=ebullets.length-1;i>=0;i--){const eb=ebullets[i];
+    eb.x+=eb.vx*dt; eb.y+=eb.vy*dt; eb.life-=dt;
+    if(eb.life<=0||eb.x<-30||eb.x>W+30||eb.y<-30||eb.y>H+30){ebullets.splice(i,1);continue;}
+    if(coverInside(eb.x,eb.y)){ebullets.splice(i,1);continue;}
+    if((player.x-eb.x)**2+(player.y-eb.y)**2 < 15*15){
+      ebullets.splice(i,1);
+      if(player.invuln<=0){
+        player.hp-=eb.dmg; player.invuln=0.25; player.hitFlash=0.16; shake=Math.min(12,shake+4); dmgFlash=0.3;
+        for(let p=0;p<5;p++)parts.push({x:eb.x,y:eb.y,vx:(Math.random()-.5)*160,vy:(Math.random()-.5)*160,life:0.25,col:'#56ff6a',sz:2});
+        if(player.hp<=0){player.hp=0;gameOver();return;}
+      }
+    }
+  }
+
   // bombs in flight
   for(let i=bombs.length-1;i>=0;i--){const bm=bombs[i];bm.t+=dt;const k=Math.min(1,bm.t/bm.dur);
     bm.x=bm.sx+(bm.tx-bm.sx)*k;bm.y=bm.sy+(bm.ty-bm.sy)*k;bm.hop=Math.sin(k*Math.PI)*46;
@@ -520,9 +553,26 @@ function update(dt){
       else if(b.st==='windup'){b.stT-=dt;b.knock.x*=0.8;b.knock.y*=0.8;if(b.stT<=0){const a=Math.atan2(player.y-b.y,player.x-b.x);b.lvx=Math.cos(a)*b.spd*5.2;b.lvy=Math.sin(a)*b.spd*5.2;b.st='lunge';b.stT=0.32;}}
       else if(b.st==='lunge'){b.stT-=dt;const lnx=b.x+b.lvx*dt,lny=b.y+b.lvy*dt;if(!coverInside(lnx,lny)){b.x=lnx;b.y=lny;}else{b.stT=0;}if(b.stT<=0){b.st='walk';b.lungeCD=2.6+Math.random()*2.2;}}
     } else if(b.kind==='rugger'){
-      if(b.st==='approach'){stepTo(b,player.x,player.y,b.spd,dt);if(dPlayer<300&&isArmed()){b.st='channel';b.chan=1.7;say('I will rug you',0.3,0.9);}}
-      else if(b.st==='channel'){b.chan-=dt;if(dPlayer>360||!isArmed()){b.st='approach';}else if(b.chan<=0){devRugHeld();b.st='leave';b.leaveA=Math.atan2(b.y-player.y,b.x-player.x);}}
-      else {b.x+=Math.cos(b.leaveA)*140*dt;b.y+=Math.sin(b.leaveA)*140*dt;b.leaveT-=dt;if(b.leaveT<=0||b.x<-40||b.x>W+40||b.y<-40||b.y>H+40){bears.splice(i,1);continue;}}
+      // Ranged shooter: closes to a comfortable firing range, then holds and shoots.
+      // Weak bullets — the threat is sustained chip damage, not burst, so they stay killable.
+      b.shotCD-=dt;
+      if(dPlayer>RUG_RANGE){ stepTo(b,player.x,player.y,b.spd,dt); }          // close in
+      else if(dPlayer<RUG_RANGE*0.62){                                        // too close — back off
+        const a=Math.atan2(b.y-player.y,b.x-player.x);
+        const bx=b.x+Math.cos(a)*b.spd*0.8*dt, by=b.y+Math.sin(a)*b.spd*0.8*dt;
+        if(!coverInside(bx,by)){b.x=bx;b.y=by;}
+      } else {                                                                // strafe while firing
+        const a=Math.atan2(player.y-b.y,player.x-b.x)+Math.PI/2*(b.strafe||1);
+        const sx2=b.x+Math.cos(a)*b.spd*0.5*dt, sy2=b.y+Math.sin(a)*b.spd*0.5*dt;
+        if(!coverInside(sx2,sy2)){b.x=sx2;b.y=sy2;} else {b.strafe=-(b.strafe||1);}
+      }
+      if(b.shotCD<=0 && dPlayer<RUG_RANGE*1.15){
+        b.shotCD=RUG_FIRE_CD*(0.85+Math.random()*0.3);
+        const a=Math.atan2(player.y-b.y,player.x-b.x)+(Math.random()-0.5)*RUG_SPREAD;
+        ebullets.push({x:b.x+Math.cos(a)*14,y:b.y+Math.sin(a)*14,
+          vx:Math.cos(a)*RUG_BULLET_SPD,vy:Math.sin(a)*RUG_BULLET_SPD,life:1.8,dmg:RUG_BULLET_DMG});
+        AudioFX.sfx.shot&&AudioFX.sfx.shot();
+      }
     } else { // rbro
       let tx=player.x,ty=player.y;
       if(b.fleeing){const dl=b.x,dr=W-b.x,dtp=b.y,db=H-b.y,m=Math.min(dl,dr,dtp,db);tx=m===dl?-40:m===dr?W+40:b.x;ty=m===dtp?-40:m===db?H+40:b.y;}
@@ -533,7 +583,13 @@ function update(dt){
     // contact
     const pr=15*b.sc+12;
     if(dPlayer<pr){
-      if(b.kind==='rugger'){if(isArmed())devRugHeld();else if(player.invuln<=0){player.hp-=5;player.invuln=0.7;player.hitFlash=0.2;shake+=5;}for(let p=0;p<12;p++)parts.push({x:b.x,y:b.y,vx:(Math.random()-.5)*240,vy:(Math.random()-.5)*240,life:0.4,col:'#56ff6a',sz:2});bears.splice(i,1);continue;}
+      if(b.kind==='rugger'){
+        // Ruggers are ranged now — they shoot from a distance and don't rug tokens.
+        // On contact they just bump you back a little (their real threat is the gun).
+        if(player.invuln<=0){player.hp-=RUG_CONTACT;player.invuln=0.6;player.hitFlash=0.18;shake+=4;dmgFlash=0.3;
+          const ka=Math.atan2(player.y-b.y,player.x-b.x);player.x+=Math.cos(ka)*14;player.y+=Math.sin(ka)*14;}
+        if(player.hp<=0){player.hp=0;gameOver();return;}
+      }
       else if(b.kind==='rbro'&&!b.fleeing){const steal=Math.min(scars,Math.max(3,Math.round(scars*0.15)));scars-=steal;b.stolen=steal;b.fleeing=true;b.spd*=1.55;AudioFX.sfx.snatch();floaters.push({x:player.x,y:player.y-30,txt:'-'+steal+' STOLEN',life:1,vy:-30,col:'#ff3b2f'});if(player.invuln<=0){player.hp-=b.dmg;player.invuln=0.5;player.hitFlash=0.18;shake+=4;dmgFlash=0.35;}}
       else if(b.kind==='bear'){if(player.invuln<=0){player.hp-=b.dmg;player.invuln=0.7;player.hitFlash=0.2;shake=Math.min(15,shake+8);dmgFlash=0.5;const ka=Math.atan2(player.y-b.y,player.x-b.x);player.x+=Math.cos(ka)*16;player.y+=Math.sin(ka)*16;}}
       if(player.hp<=0){player.hp=0;gameOver();return;}
@@ -663,6 +719,10 @@ function render(){
     else {blit(RBRO_S,b.x,b.y+by,SCALE*0.6,b.fleeing?-1:1,RBRO_W,b.hitFlash);label(b.fleeing?'THIEF →':'RUGGED BRO',b.x,b.y-24,b.fleeing?'#ff3b2f':'#7fa86a');}
   }
   for(const bl of bullets){ctx.save();ctx.translate(bl.x,bl.y);ctx.rotate(bl.ang);ctx.fillStyle=bl.col;ctx.fillRect(-2,-bl.bsz/2,8+bl.bsz,bl.bsz);ctx.fillStyle=bl.core;ctx.fillRect(-5,-(bl.bsz-1)/2,6,bl.bsz-1);ctx.restore();}
+  // Dev Rugger shots — green, glowing, clearly telegraphed so they're dodgeable
+  for(const eb of ebullets){ctx.save();ctx.shadowColor='#56ff6a';ctx.shadowBlur=10;
+    ctx.fillStyle='#8dffa0';ctx.beginPath();ctx.arc(eb.x,eb.y,4,0,6.3);ctx.fill();
+    ctx.fillStyle='#e6ffe9';ctx.beginPath();ctx.arc(eb.x,eb.y,1.8,0,6.3);ctx.fill();ctx.restore();}
   const pby=Math.sin(player.bob)*1.6,blink=player.invuln>0?(Math.floor(player.invuln*20)%2===0?0.45:1):1;
   ctx.globalAlpha=blink;blit(broSpr[chosen],player.x,player.y+pby,SCALE,player.face,broWht,player.hitFlash);ctx.globalAlpha=1;drawGun();drawMelee();
   drawBombs();
@@ -686,6 +746,13 @@ function render(){
 
 /* ===================== HUD ===================== */
 const marketEl=document.getElementById('market');
+// tap MARKET to open/close the token list (keeps mobile screens clear)
+document.getElementById('marketTab').addEventListener('click',e=>{
+  e.stopPropagation();
+  const open=marketEl.classList.toggle('on');
+  e.currentTarget.classList.toggle('open',open);
+  e.currentTarget.textContent = open ? '✕ CLOSE' : '⚔ MARKET';
+});
 function refreshMarket(){if(state!=='playing'){marketEl.innerHTML='';return;}let html='';market.forEach((t,i)=>{const up=t.trend>=0,isHeld=held&&held.ticker===t.ticker;const cls='chip'+(isHeld?' held':'')+(t.rugged?' rug':'');html+=`<div class="${cls}" data-i="${i}"><div class="tk">${t.ticker}</div><div class="mc ${up?'up':'dn'}">${t.rugged?'RUGGED':fmtMC(t.mc)} ${t.rugged?'':(up?'▲':'▼')}</div></div>`;});marketEl.innerHTML=html;[...marketEl.children].forEach(ch=>ch.addEventListener('click',()=>apeToken(+ch.dataset.i)));}
 function refreshHUD(){
   document.getElementById('scarVal').textContent=scars;document.getElementById('timeVal').textContent=elapsed.toFixed(1)+'s';
@@ -702,7 +769,7 @@ function refreshHUD(){
 document.getElementById('sellBtn').addEventListener('click',()=>sellHeld(false));
 document.getElementById('bombBtn').addEventListener('click',()=>throwBomb());
 document.getElementById('muteBtn').addEventListener('click',()=>{const m=AudioFX.toggle();BGM.toggle();document.getElementById('muteBtn').textContent=m?'♪̸':'♪';document.getElementById('muteBtn').style.color=m?'#9a9079':'#e7c87e';});
-function exitToMenu(){state='menu';BGM.duck(false);document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');document.getElementById('exitBtn').classList.remove('on');document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');if('speechSynthesis'in window)speechSynthesis.cancel();}
+function exitToMenu(){state='menu';BGM.duck(false);document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');document.getElementById('marketTab').classList.remove('show','open');document.getElementById('exitBtn').classList.remove('on');document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');if('speechSynthesis'in window)speechSynthesis.cancel();}
 document.getElementById('exitBtn').addEventListener('click',exitToMenu);
 
 function verdict(){
@@ -716,7 +783,7 @@ function verdict(){
   return{f:'EXIT LIQUIDITY',line:'Down before you began. We were all you, once.'};
 }
 function gameOver(){state='gameover';sessionBest=Math.max(sessionBest,scars);AudioFX.sfx.death();document.getElementById('exitBtn').classList.remove('on');
-  document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');
+  document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');document.getElementById('marketTab').classList.remove('show','open');
   document.getElementById('goScars').textContent=scars;document.getElementById('goDepth').textContent=depthMax;
   document.getElementById('goKills').textContent=kills;document.getElementById('goBest').textContent=sessionBest;
   const v=verdict();document.getElementById('goVerdict').innerHTML='<span class="fac">'+v.f+'</span>'+v.line;

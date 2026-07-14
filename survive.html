@@ -792,35 +792,41 @@ function gameOver(){state='gameover';sessionBest=Math.max(sessionBest,scars);Aud
     ob.style.display='block';document.getElementById('lbResult').innerHTML='';
     const wallet=connectedWallet();const btn=document.getElementById('submitRun'),ci=document.getElementById('callsign');
     if(wallet){
-      btn.disabled=false;btn.textContent='SUBMIT';
-      document.getElementById('lbResult').innerHTML='<div style="font-size:11px;color:var(--bone-dim);">Posting as ⛓ '+wallet.slice(0,6)+'…'+wallet.slice(-4)+'</div>';
+      // Auto-submit as soon as the run ends — no window to tamper with the score.
+      // We only stop to ask for a name if this wallet has never set one.
+      btn.style.display='none'; ci.style.display='none';
+      document.getElementById('lbResult').textContent='Reporting in…';
       fetch(BACKEND_URL+'/player/'+wallet).then(r=>r.json()).then(d=>{
-        if(d.data&&d.data.name){
-          ci.value=d.data.name; ci.readOnly=true; ci.style.opacity='0.85';
-          document.getElementById('lbResult').innerHTML='<div style="font-size:11px;color:var(--bone-dim);">Playing as <b style="color:var(--brass-br);">'+d.data.name+'</b> · saved to your wallet</div>';
-        } else {
-          ci.readOnly=false; ci.placeholder='ENTER YOUR NAME (SAVED ONCE)';
+        const saved=(d.data&&d.data.name)?d.data.name:null;
+        if(saved){ submitRun(saved); }                 // known player: post it immediately
+        else{                                          // first run on this wallet: ask once
+          ci.style.display='';btn.style.display='';
+          ci.readOnly=false; ci.value=''; ci.placeholder='ENTER YOUR NAME (SAVED ONCE)';
+          btn.disabled=false; btn.textContent='SAVE NAME & POST';
+          document.getElementById('lbResult').innerHTML='<div style="font-size:11px;color:var(--bone-dim);">Pick a name — it\u2019s saved to your wallet, so we won\u2019t ask again.</div>';
         }
-      }).catch(()=>{});
+      }).catch(()=>{ submitRun('anon'); });
     } else {
-      btn.disabled=true;btn.textContent='SUBMIT';
-      document.getElementById('lbResult').innerHTML='Connect a wallet on the <a href="index.html" style="color:var(--brass-br);">home page</a> to post your score.';
+      btn.style.display='none'; ci.style.display='none';
+      document.getElementById('lbResult').innerHTML='Connect a wallet on the <a href="home.html" style="color:var(--brass-br);">home page</a> to post your score.';
     }
   }
   else ob.style.display='none';
   document.getElementById('gameover').classList.remove('hidden');}
 function connectedWallet(){try{const w=JSON.parse(localStorage.getItem('trench_wallet')||'null');return (w&&w.addr)?w.addr:null;}catch(e){return null;}}
-async function submitRun(){
+// proof that this browser owns the wallet — saved once at connect, sent silently with runs
+function walletToken(){try{const w=JSON.parse(localStorage.getItem('trench_wallet')||'null');return (w&&w.token)?w.token:null;}catch(e){return null;}}
+async function submitRun(nameOverride){
   if(!BACKEND_URL)return;
   const btn=document.getElementById('submitRun'),out=document.getElementById('lbResult');
   const wallet=connectedWallet();
-  if(!wallet){out.innerHTML='Connect a wallet on the <a href="index.html" style="color:var(--brass-br);">home page</a> to post your score.';return;}
-  const handle=(document.getElementById('callsign').value||'anon').trim();
+  if(!wallet){out.innerHTML='Connect a wallet on the <a href="home.html" style="color:var(--brass-br);">home page</a> to post your score.';return;}
+  const handle=(nameOverride||document.getElementById('callsign').value||'anon').trim();
   if(!runSession){out.textContent='No run session — play a fresh run to score.';return;}
   btn.disabled=true;btn.textContent='...';out.textContent='Reporting in…';
   try{
     const res=await fetch(BACKEND_URL+'/runs',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({handle,faction:chosen.toUpperCase(),scars,depth:depthMax,kills,session:runSession,wallet})});
+      body:JSON.stringify({handle,faction:chosen.toUpperCase(),scars,depth:depthMax,kills,session:runSession,wallet,signature:walletToken()})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.detail||'submit failed');}
     runSession=null;   // one score per run
     const d=await res.json();
@@ -869,7 +875,7 @@ document.getElementById('guideX').addEventListener('click',()=>document.getEleme
 document.getElementById('guide').addEventListener('click',e=>{if(e.target.id==='guide')document.getElementById('guide').classList.remove('on');});
 ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,function _a(){AudioFX.init();AudioFX.resume();BGM.start();},{once:true}));
 document.getElementById('btnAgain').addEventListener('click',()=>startGame(chosen));
-document.getElementById('submitRun').addEventListener('click',submitRun);
+document.getElementById('submitRun').addEventListener('click',()=>submitRun());
 document.getElementById('btnClass').addEventListener('click',()=>{state='menu';document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');});
 
 /* ===================== LOOP ===================== */

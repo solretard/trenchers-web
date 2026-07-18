@@ -100,6 +100,15 @@
   .modeh::before{right:calc(100% + 12px);} .modeh::after{left:calc(100% + 12px);}
   .cards{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;justify-content:center;}
   .card{pointer-events:auto;cursor:pointer;width:150px;padding:14px 12px 16px;background:linear-gradient(180deg,rgba(36,32,21,.95),rgba(18,16,11,.95));border:1px solid rgba(200,155,74,.3);transition:transform .12s,border-color .12s,box-shadow .12s;}
+  /* NFT-gated classes: visible but locked, so non-holders see what they're missing */
+  .card.locked{position:relative;cursor:not-allowed;border-color:rgba(154,144,121,.25);}
+  .card.locked .portrait,.card.locked .cname,.card.locked .crole,.card.locked .stat,.card.locked .desc{opacity:.32;filter:grayscale(1);}
+  .card.locked:hover{transform:none;}
+  .lockbadge{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:6px;z-index:3;text-align:center;padding:8px;pointer-events:none;}
+  .lockbadge .ico{font-size:22px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8));}
+  .lockbadge .msg{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.1em;color:var(--brass-br);
+    background:rgba(12,11,7,.88);border:1px solid rgba(200,155,74,.45);padding:5px 7px;line-height:1.4;}
   .card:hover{transform:translateY(-4px);border-color:var(--brass-br);box-shadow:0 8px 0 rgba(0,0,0,.4),0 0 22px rgba(200,155,74,.18);}
   .card canvas{width:72px;height:80px;image-rendering:pixelated;display:block;margin:0 auto 8px;}
   .card .cname{font-family:'Oswald';font-weight:600;font-size:17px;letter-spacing:2px;color:var(--brass-br);}
@@ -414,6 +423,8 @@ function enterRoom(d){
   else setTimeout(()=>AudioFX.sfx.roar(),700);
 }
 function startGame(cls){
+  if(isLocked(cls)){ document.getElementById('gameover').classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden'); state='menu'; buildCards(); return; }
   chosen=cls;const C=CLASSES[cls];state='playing';
   BGM.duck(true);   // lower music during the run so SFX cut through
   runSession=null;
@@ -769,7 +780,7 @@ function refreshHUD(){
 document.getElementById('sellBtn').addEventListener('click',()=>sellHeld(false));
 document.getElementById('bombBtn').addEventListener('click',()=>throwBomb());
 document.getElementById('muteBtn').addEventListener('click',()=>{const m=AudioFX.toggle();BGM.toggle();document.getElementById('muteBtn').textContent=m?'♪̸':'♪';document.getElementById('muteBtn').style.color=m?'#9a9079':'#e7c87e';});
-function exitToMenu(){state='menu';BGM.duck(false);document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');document.getElementById('marketTab').classList.remove('show','open');document.getElementById('exitBtn').classList.remove('on');document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');if('speechSynthesis'in window)speechSynthesis.cancel();}
+function exitToMenu(){state='menu';BGM.duck(false);document.getElementById('hud').classList.remove('on');document.getElementById('market').classList.remove('on');document.getElementById('marketTab').classList.remove('show','open');document.getElementById('exitBtn').classList.remove('on');document.getElementById('gameover').classList.add('hidden');document.getElementById('menu').classList.remove('hidden');if('speechSynthesis'in window)speechSynthesis.cancel();refreshNftCount();}
 document.getElementById('exitBtn').addEventListener('click',exitToMenu);
 
 function verdict(){
@@ -856,7 +867,25 @@ cv.addEventListener('pointerup',_endptr);
 cv.addEventListener('pointercancel',_endptr);
 
 /* ===================== MENU ===================== */
+// ---- NFT gating: APER is free, DIAMOND + SNIPER need a Trenchers NFT ----
+const FREE_CLASS='aper';
+let nftCount=0;                       // how many Trenchers NFTs the connected wallet holds
+function isLocked(key){return key!==FREE_CLASS && nftCount<1;}
+
+async function refreshNftCount(){
+  const w=connectedWallet();
+  if(!w||!BACKEND_URL){nftCount=0;buildCards();return;}
+  try{
+    const r=await fetch(BACKEND_URL+'/nft/holder/'+w);
+    const d=await r.json();
+    nftCount=(d&&typeof d.count==='number')?d.count:0;
+  }catch(e){nftCount=0;}
+  buildCards();
+}
+
 function buildCards(){const wrap=document.getElementById('classCards');wrap.innerHTML='';for(const key in CLASSES){const C=CLASSES[key];const card=document.createElement('div');card.className='card';
+  const locked=isLocked(key);
+  if(locked)card.classList.add('locked');
   const stats=Object.entries(C.pips).map(([k,v])=>{let pips='';for(let i=0;i<5;i++)pips+='<span class="pip'+(i<v?' on':'')+'"></span>';return '<div class="stat"><span>'+k+'</span><span class="pips">'+pips+'</span></div>';}).join('');
   card.innerHTML='<div class="cname">'+C.name+'</div><div class="crole">'+C.role+'</div>'+stats+'<div class="desc">'+C.desc+'</div>';
   // canvas added AFTER innerHTML so its drawing isn't wiped, then placed on top
@@ -867,9 +896,22 @@ function buildCards(){const wrap=document.getElementById('classCards');wrap.inne
   x.fillStyle='rgba(0,0,0,0.35)';x.beginPath();x.ellipse(52,96,sw*0.34,7,0,0,6.3);x.fill();
   x.drawImage(spr,(104-sw)/2,(108-sh)/2-4,sw,sh);
   card.insertBefore(cc,card.firstChild);
-  card.addEventListener('click',()=>startGame(key));wrap.appendChild(card);
+  if(locked){
+    const lb=document.createElement('div');lb.className='lockbadge';
+    lb.innerHTML='<div class="ico">🔒</div><div class="msg">HOLD A<br>TRENCHERS NFT<br>TO UNLOCK</div>';
+    card.appendChild(lb);
+    card.addEventListener('click',()=>{
+      const w=connectedWallet();
+      alert(w ? 'This class is for Trenchers NFT holders. Mint one to unlock '+C.name+'.'
+              : 'Connect your wallet on the home page — Trenchers NFT holders unlock '+C.name+'.');
+    });
+  } else {
+    card.addEventListener('click',()=>startGame(key));
+  }
+  wrap.appendChild(card);
 }}
 buildCards();
+refreshNftCount();
 document.getElementById('guideBtn').addEventListener('click',()=>document.getElementById('guide').classList.add('on'));
 document.getElementById('guideX').addEventListener('click',()=>document.getElementById('guide').classList.remove('on'));
 document.getElementById('guide').addEventListener('click',e=>{if(e.target.id==='guide')document.getElementById('guide').classList.remove('on');});

@@ -376,15 +376,15 @@ const ARMED_MIN_VALUE=50;       // below this your position is too small to be a
 // Gun tier now comes from what your POSITION IS WORTH, not the token's market cap —
 // so a tiny ape on a huge token doesn't hand you a cannon. Size matters.
 function tierFromValue(v){return v<150?0:v<400?1:v<1000?2:v<2500?3:4;}
-function heldValue(){const t=curHeldToken();if(!held||!t||!t.alive||t.rugged)return 0;
-  return held.size*(t.mc/held.entryMc);}
+function heldValue(){const t=curHeldToken();if(!held||!t||t.rugged)return 0;
+  return held.size*(t.mc/held.entryMc);}   // dead-but-not-rugged still has residual value
 function tierFromMC(mc){return mc<25e3?0:mc<100e3?1:mc<500e3?2:mc<2e6?3:4;}
 
 /* ===================== MARKET / TOKENS ===================== */
 const TICKERS=['$COPE','$REKT','$WAGMI','$NGMI','$JEET','$BTFD','$MOON','$DUMP','$HODL','$APE','$FOMO','$SER','$GM','$BONK','$WICK'];
 let market=[],tickAcc=0,held=null,vtrc=VTRC_START;
 function fmtMC(v){if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(2)+'M';if(v>=1e3)return '$'+(v/1e3).toFixed(1)+'K';return '$'+Math.round(v);}
-function spawnToken(){if(market.length>=10)return;const used=market.map(t=>t.ticker);const pool=TICKERS.filter(t=>!used.includes(t));const tk=pool.length?pool[Math.floor(Math.random()*pool.length)]:'$'+Math.random().toString(36).slice(2,5).toUpperCase();const roll=Math.random();const fate=roll<0.10?'rug':roll<0.42?'bleeder':roll<0.72?'chop':'runner';const base=6e3+Math.random()*70e3;market.push({ticker:tk,mc:base,base,fate,age:0,rugAt:5+Math.random()*9,rugged:false,recoverAt:0,willRecover:false,last:0,trend:0,alive:true});}
+function spawnToken(){if(market.length>=10)return;const used=market.map(t=>t.ticker);const pool=TICKERS.filter(t=>!used.includes(t));const tk=pool.length?pool[Math.floor(Math.random()*pool.length)]:'$'+Math.random().toString(36).slice(2,5).toUpperCase();const roll=Math.random();const fate=roll<0.10?'rug':roll<0.42?'bleeder':roll<0.72?'chop':'runner';const base=6e3+Math.random()*70e3;market.push({ticker:tk,mc:base,base,fate,age:0,rugAt:14+Math.random()*18,rugged:false,recoverAt:0,willRecover:false,last:0,trend:0,alive:true});}
 function curHeldToken(){return held?market.find(t=>t.ticker===held.ticker):null;}
 function isArmed(){const t=curHeldToken();return !!(t&&t.alive&&!t.rugged&&heldValue()>=ARMED_MIN_VALUE);}
 function tickMarket(){
@@ -396,9 +396,21 @@ function tickMarket(){
       if(t.age>=t.rugAt){ t.rugged=true;t.mc=500;t.recoverAt=t.age+(2.5+Math.random()*3.5);t.willRecover=Math.random()<0.6; if(held&&held.ticker===t.ticker)markHeldRugged(); }
       else t.mc*=(1+(Math.random()*0.07-0.012));
     } else if(t.fate==='runner'){ t.mc*=(1+Math.random()*0.06-0.008); if(t.age>14&&Math.random()<0.04)t.mc*=0.45; }
-    else if(t.fate==='bleeder'){ t.mc*=(1-Math.random()*0.025-0.004); if(t.mc<1200)t.alive=false; }
+    else if(t.fate==='bleeder'){ t.mc*=(1-Math.random()*0.015-0.002); if(t.mc<900)t.alive=false; }
     else { t.mc*=(1+(Math.random()*0.07-0.035)); if(t.age>22)t.alive=false; }
     t.trend=t.mc-t.last;
+  }
+  // Before delisting dead tokens: if the player is holding one, close the position
+  // and pay out what it's still worth. Previously the token just vanished from the
+  // market and the bag silently became worth nothing — that read as "rugged again".
+  if(held){
+    const ht=market.find(t=>t.ticker===held.ticker);
+    if(ht && !ht.alive && !ht.rugged){
+      const back=Math.max(0,Math.round(held.size*(ht.mc/held.entryMc)));
+      vtrc+=back; sells++;
+      floaters.push({x:player.x,y:player.y-32,txt:held.ticker+' DELISTED · +'+back+' vTRC',life:1.6,vy:-30,col:'#ff8a4a'});
+      held=null; refreshHUD();
+    }
   }
   market=market.filter(t=>t.alive);
   while(market.length<6)spawnToken();
@@ -456,7 +468,7 @@ function sellHeld(silent){if(!held)return;const t=curHeldToken();
   // Position value returns to your wallet. Scars come from COMBAT only — trading
   // makes you powerful, fighting makes you scored.
   let back=0;
-  if(t&&t.alive&&!t.rugged){ back=Math.max(0,Math.round(held.size*(t.mc/held.entryMc))); }
+  if(t&&!t.rugged){ back=Math.max(0,Math.round(held.size*(t.mc/held.entryMc))); }
   const pnl=back-held.size;
   vtrc+=back;
   if(back>0){sells++;

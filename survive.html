@@ -28,6 +28,33 @@
     border:1px solid rgba(200,155,74,.35);padding:7px 16px;display:none;user-select:none;}
   #marketTab.show{display:block;}
   #marketTab.open{color:var(--flare);border-color:rgba(255,90,38,.5);}
+  /* ---- APE panel: size your position without leaving the trench ---- */
+  #apeWrap{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+    background:rgba(6,5,3,.82);padding:18px;}
+  #apeWrap.on{display:flex;}
+  #apePanel{width:min(340px,94vw);background:linear-gradient(180deg,rgba(33,30,21,.99),rgba(16,15,10,.99));
+    border:1px solid rgba(200,155,74,.45);padding:18px 16px 16px;box-shadow:0 20px 60px rgba(0,0,0,.75);}
+  #apePanel .tk{font-family:'Oswald';font-weight:700;font-size:22px;letter-spacing:2px;color:var(--brass-br);}
+  #apePanel .mc{font-family:'Space Mono',monospace;font-size:11px;color:var(--bone-dim);margin-top:2px;}
+  #apePanel .bal{font-family:'Space Mono',monospace;font-size:11px;color:var(--bone);margin-top:10px;
+    border-top:1px solid rgba(200,155,74,.18);padding-top:10px;}
+  #apePanel .bal b{color:var(--brass-br);}
+  #apeInput{width:100%;margin-top:10px;background:#0d0c08;border:1px solid rgba(200,155,74,.4);
+    color:var(--brass-br);font-family:'Space Mono',monospace;font-size:20px;font-weight:700;
+    padding:10px 12px;text-align:center;outline:none;}
+  #apeInput:focus{border-color:var(--brass);}
+  .quick{display:flex;gap:6px;margin-top:8px;}
+  .quick button{flex:1;background:rgba(200,155,74,.10);border:1px solid rgba(200,155,74,.3);
+    color:var(--bone-dim);font-family:'Space Mono',monospace;font-size:11px;padding:7px 0;cursor:pointer;}
+  .quick button:hover{color:var(--brass-br);border-color:var(--brass);}
+  #apeGun{margin-top:10px;font-family:'Space Mono',monospace;font-size:11px;text-align:center;
+    color:var(--bone-dim);background:rgba(0,0,0,.35);border:1px solid rgba(200,155,74,.18);padding:7px;}
+  #apeGun b{color:var(--gain);}
+  .apeBtns{display:flex;gap:8px;margin-top:12px;}
+  .apeBtns button{flex:1;font-family:'Oswald';font-weight:700;letter-spacing:2px;font-size:13px;
+    padding:11px 0;cursor:pointer;border:1px solid;}
+  #apeGo{background:linear-gradient(180deg,#c89b4a,#9a7433);border-color:#e7c87e;color:#100f0a;}
+  #apeCancel{background:transparent;border-color:rgba(154,144,121,.4);color:var(--bone-dim);}
   .chip{flex:0 0 auto;min-width:84px;cursor:pointer;padding:5px 8px;background:linear-gradient(180deg,rgba(33,30,21,.95),rgba(16,15,10,.95));border:1px solid rgba(200,155,74,.28);transition:transform .1s;position:relative;}
   .chip:active{transform:scale(.96);}
   .chip.held{border-color:var(--brass-br);box-shadow:0 0 14px rgba(200,155,74,.35);}
@@ -136,6 +163,25 @@
   <div id="dmgflash"></div>
   <div id="market"></div>
   <div id="marketTab">⚔ MARKET</div>
+  <div id="apeWrap">
+    <div id="apePanel">
+      <div class="tk" id="apeTk">$TOKEN</div>
+      <div class="mc" id="apeMc">MC $0</div>
+      <div class="bal">Wallet: <b><span id="apeBal">0</span> vTRC</b></div>
+      <input id="apeInput" type="number" inputmode="numeric" value="300">
+      <div class="quick">
+        <button data-q="0.25">25%</button>
+        <button data-q="0.5">50%</button>
+        <button data-q="0.75">75%</button>
+        <button data-q="1">MAX</button>
+      </div>
+      <div id="apeGun">this bag arms a <b>PISTOL</b></div>
+      <div class="apeBtns">
+        <button id="apeCancel">CANCEL</button>
+        <button id="apeGo">APE IT</button>
+      </div>
+    </div>
+  </div>
   <div id="muteBtn">♪</div>
   <div id="exitBtn">EXIT</div>
 
@@ -358,15 +404,48 @@ function tickMarket(){
   while(market.length<6)spawnToken();
   refreshMarket();
 }
-function apeToken(idx){const t=market[idx];if(!t||!t.alive||t.rugged)return;if(held&&held.ticker===t.ticker)return;
-  // You decide the size. Bag size = firepower, so this is the real decision.
+// ---- APE panel: pick your position size in-game (no browser prompt) ----
+let apePaused=false, apeIdx=-1;
+const apeWrap=document.getElementById('apeWrap'), apeInput=document.getElementById('apeInput');
+function apeGunPreview(){
+  const v=Math.max(0,Math.floor(Number(apeInput.value)||0));
+  const el=document.getElementById('apeGun');
+  if(v<VTRC_MIN_APE){el.innerHTML='minimum <b>'+VTRC_MIN_APE+' vTRC</b>';return;}
+  el.innerHTML='this bag arms a <b>'+GUNS[tierFromValue(v)].name+'</b>';
+}
+function openApe(idx){
+  const t=market[idx]; if(!t||!t.alive||t.rugged)return;
   if(vtrc<VTRC_MIN_APE){floaters.push({x:player.x,y:player.y-32,txt:'NO LIQUIDITY',life:1.2,vy:-30,col:'#ff3b2f'});return;}
-  const maxIn=Math.floor(vtrc);
-  const raw=prompt('APE '+t.ticker+'  ·  MC '+fmtMC(t.mc)+'\nBalance: '+maxIn+' vTRC\nHow much do you want to ape?', String(Math.min(300,maxIn)));
-  if(raw===null)return;
-  let amt=Math.floor(Number(raw));
-  if(!isFinite(amt)||amt<VTRC_MIN_APE){floaters.push({x:player.x,y:player.y-32,txt:'MIN '+VTRC_MIN_APE+' vTRC',life:1.2,vy:-30,col:'#ff3b2f'});return;}
-  if(amt>maxIn)amt=maxIn;
+  apeIdx=idx; apePaused=true;
+  document.getElementById('apeTk').textContent=t.ticker;
+  document.getElementById('apeMc').textContent='MC '+fmtMC(t.mc);
+  document.getElementById('apeBal').textContent=Math.floor(vtrc);
+  apeInput.max=Math.floor(vtrc);
+  apeInput.value=Math.min(300,Math.floor(vtrc));
+  apeGunPreview();
+  apeWrap.classList.add('on');
+  setTimeout(()=>apeInput.focus(),50);
+}
+function closeApe(){apeWrap.classList.remove('on');apePaused=false;apeIdx=-1;}
+apeInput.addEventListener('input',apeGunPreview);
+document.querySelectorAll('.quick button').forEach(b=>b.addEventListener('click',()=>{
+  apeInput.value=Math.floor(vtrc*parseFloat(b.dataset.q));apeGunPreview();
+}));
+document.getElementById('apeCancel').addEventListener('click',closeApe);
+document.getElementById('apeGo').addEventListener('click',()=>{
+  if(apeIdx<0)return;
+  let amt=Math.floor(Number(apeInput.value)||0);
+  if(amt<VTRC_MIN_APE){apeGunPreview();return;}
+  if(amt>vtrc)amt=Math.floor(vtrc);
+  doApe(apeIdx,amt); closeApe();
+});
+apeInput.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('apeGo').click();
+  if(e.key==='Escape')closeApe();});
+
+function apeToken(idx){ openApe(idx); }
+
+function doApe(idx,amt){const t=market[idx];if(!t||!t.alive||t.rugged)return;
+  if(held&&held.ticker===t.ticker)return;
   if(held){ if(held.pendingRug)bailedOnRug++; sellHeld(true); apes++; }
   vtrc-=amt;
   held={ticker:t.ticker,entryMc:t.mc,size:amt,pendingRug:false};
@@ -491,6 +570,7 @@ function spawnEnemy(){
 const DOOR={w:104,h:88,top:PADY+8};
 function doorRect(){return {x:W/2-DOOR.w/2,y:DOOR.top,w:DOOR.w,h:DOOR.h};}
 function update(dt){
+  if(apePaused)return;   // world holds still while you size your position
   elapsed+=dt;roomTime+=dt;if(doorCD>0)doorCD-=dt;if(fadeA>0)fadeA=Math.max(0,fadeA-dt*1.6);
   tickAcc+=dt;if(tickAcc>=0.3){tickAcc-=0.3;tickMarket();}
   const C=CLASSES[chosen];

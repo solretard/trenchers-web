@@ -756,12 +756,23 @@ function stepTo(b,tx,ty,spd,dt){
   const ky=b.y+b.knock.y*dt;if(!coverBlocked(b.x,ky))b.y=ky;
   b.knock.x*=0.86;b.knock.y*=0.86;
 }
+const BOMB_RANGE=340;   // furthest you can lob it
 function throwBomb(){
   if(state!=='playing'||!player||player.bombCharge<1)return;
   player.bombCharge=0;
+  // Land it where the player is AIMING. On mouse we use the exact cursor position;
+  // on touch/stick we throw along the aim angle. (It used to auto-target the biggest
+  // cluster of enemies, which is why it felt like it landed somewhere random.)
   let tx,ty;
-  if(bears.length){let best=bears[0],bn=-1;for(const b of bears){let n=0;for(const o of bears){if(Math.hypot(o.x-b.x,o.y-b.y)<90)n++;}if(n>bn){bn=n;best=b;}}tx=best.x;ty=best.y;}
-  else {tx=player.x+Math.cos(player.aim)*220;ty=player.y+Math.sin(player.aim)*220;}
+  if(hasMouse && !aimStick.active){
+    tx=mouseX/zoom+camX; ty=mouseY/zoom+camY;
+  } else {
+    tx=player.x+Math.cos(player.aim)*220; ty=player.y+Math.sin(player.aim)*220;
+  }
+  // clamp to max throw range so it can't be lobbed across the whole map
+  const dx=tx-player.x, dy=ty-player.y, d=Math.hypot(dx,dy);
+  if(d>BOMB_RANGE){ tx=player.x+dx/d*BOMB_RANGE; ty=player.y+dy/d*BOMB_RANGE; }
+  if(d<10){ tx=player.x+Math.cos(player.aim)*60; ty=player.y+Math.sin(player.aim)*60; }
   bombs.push({sx:player.x,sy:player.y,x:player.x,y:player.y,tx,ty,t:0,dur:0.5,hop:0});
   AudioFX.sfx.throw();
   refreshHUD();
@@ -771,6 +782,24 @@ function throwBomb(){
 function drawFloor(){const T=36;const vw=cv.width/zoom,vh=cv.height/zoom;const x0=Math.floor(camX/T)-1,x1=Math.ceil((camX+vw)/T)+1,y0=Math.floor(camY/T)-1,y1=Math.ceil((camY+vh)/T)+1;for(let ty=y0;ty<y1;ty++)for(let tx=x0;tx<x1;tx++){const h=((tx*73856093)^(ty*19349663))>>>0;const v=h%100;ctx.fillStyle=v<50?'#1b1912':v<82?'#201d15':'#171510';ctx.fillRect(tx*T,ty*T,T,T);ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(tx*T,ty*T,T,2);ctx.fillRect(tx*T,ty*T,2,T);if(v>=90){ctx.fillStyle='#100e09';ctx.fillRect(tx*T+10,ty*T+12,T-20,T-20);}}}
 function blit(spr,cx,cy,scale,face,fl,flash){const w=spr.width*scale,h=spr.height*scale;ctx.save();ctx.translate(Math.round(cx),Math.round(cy));if(face<0)ctx.scale(-1,1);ctx.drawImage(spr,-w/2,-h/2,w,h);if(flash>0&&fl){ctx.globalAlpha=Math.min(1,flash*6);ctx.drawImage(fl,-w/2,-h/2,w,h);ctx.globalAlpha=1;}ctx.restore();}
 function label(txt,x,y,col){ctx.font='700 10px Oswald';ctx.textAlign='center';ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillText(txt,x+1,y+1);ctx.fillStyle=col;ctx.fillText(txt,x,y);}
+// When the bomb is charged, show exactly where it will land — so the throw is never a surprise.
+function drawBombReticle(){
+  if(state!=='playing'||!player||player.bombCharge<1)return;
+  let tx,ty;
+  if(hasMouse && !aimStick.active){ tx=mouseX/zoom+camX; ty=mouseY/zoom+camY; }
+  else { tx=player.x+Math.cos(player.aim)*220; ty=player.y+Math.sin(player.aim)*220; }
+  const dx=tx-player.x, dy=ty-player.y, d=Math.hypot(dx,dy);
+  if(d>BOMB_RANGE){ tx=player.x+dx/d*BOMB_RANGE; ty=player.y+dy/d*BOMB_RANGE; }
+  const p=0.5+0.5*Math.sin(elapsed*6);
+  ctx.save();
+  ctx.strokeStyle='rgba(255,90,38,'+(0.45+0.35*p)+')';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(tx,ty,BLAST_RADIUS*0.5,0,6.3);ctx.stroke();
+  ctx.setLineDash([5,6]);ctx.strokeStyle='rgba(255,90,38,'+(0.25+0.2*p)+')';
+  ctx.beginPath();ctx.arc(tx,ty,BLAST_RADIUS,0,6.3);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle='rgba(255,210,122,.9)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(tx-9,ty);ctx.lineTo(tx+9,ty);ctx.moveTo(tx,ty-9);ctx.lineTo(tx,ty+9);ctx.stroke();
+  ctx.restore();
+}
 function drawGun(){const ht=curHeldToken();if(!isArmed())return;const tier=tierFromValue(heldValue());const spr=GUNSPR[tier];const a=player.aim,s=2.6,w=spr.width*s,h=spr.height*s;ctx.save();ctx.translate(Math.round(player.x),Math.round(player.y+2));ctx.rotate(a);if(Math.cos(a)<0)ctx.scale(1,-1);ctx.drawImage(spr,4,-h/2,w,h);ctx.restore();if(player.muzzle>0){const tip=18+tier*3,mx=player.x+Math.cos(a)*tip,my=player.y+Math.sin(a)*tip;ctx.fillStyle=GUNS[tier].col;ctx.beginPath();ctx.arc(mx,my,5+tier,0,6.3);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(mx,my,2+tier*0.4,0,6.3);ctx.fill();}}
 function drawChevron(cx,cy,s){ctx.beginPath();ctx.moveTo(cx-s,cy+s*0.55);ctx.lineTo(cx,cy-s*0.45);ctx.lineTo(cx+s,cy+s*0.55);ctx.lineTo(cx+s,cy+s*0.55+3);ctx.lineTo(cx,cy-s*0.45+3);ctx.lineTo(cx-s,cy+s*0.55+3);ctx.closePath();ctx.fill();}
 function drawMelee(){ if(isArmed())return; const a=player.aim;
@@ -858,7 +887,7 @@ function render(){
     ctx.fillStyle='#8dffa0';ctx.beginPath();ctx.arc(eb.x,eb.y,4,0,6.3);ctx.fill();
     ctx.fillStyle='#e6ffe9';ctx.beginPath();ctx.arc(eb.x,eb.y,1.8,0,6.3);ctx.fill();ctx.restore();}
   const pby=Math.sin(player.bob)*1.6,blink=player.invuln>0?(Math.floor(player.invuln*20)%2===0?0.45:1):1;
-  ctx.globalAlpha=blink;blit(broSpr[chosen],player.x,player.y+pby,SCALE,player.face,broWht,player.hitFlash);ctx.globalAlpha=1;drawGun();drawMelee();
+  ctx.globalAlpha=blink;blit(broSpr[chosen],player.x,player.y+pby,SCALE,player.face,broWht,player.hitFlash);ctx.globalAlpha=1;drawGun();drawMelee();drawBombReticle();
   drawBombs();
   for(const p of parts){ctx.globalAlpha=Math.min(1,p.life*4);ctx.fillStyle=p.col;ctx.fillRect(p.x,p.y,p.sz,p.sz);}ctx.globalAlpha=1;
   ctx.font='700 14px Oswald';ctx.textAlign='center';for(const f of floaters){ctx.globalAlpha=Math.min(1,f.life*2);ctx.fillStyle=f.col||'#e7c87e';ctx.fillText(f.txt,f.x,f.y);}ctx.globalAlpha=1;

@@ -146,13 +146,15 @@
       <div class="gun" id="gunName">UNARMED</div>
       <div class="sub" id="gunSub">ape a token to arm up</div>
       <div class="pl" id="gunPL"></div>
-      <button id="sellBtn" style="display:none;">SELL · BANK SCARS</button>
+      <button id="sellBtn" style="display:none;">SELL · BANK vTRC</button>
     </div>
     <div id="unarmed">NO BAG — SWORD ONLY · APE A TOKEN ↑</div>
     <div id="bombBtn"><div id="bombFill"></div><span id="bombLabel">BOMB 0%</span></div>
     <div class="hud-top">
       <div class="panel" style="text-align:right;">
         <div class="lbl">Scars</div><div class="scars"><span id="scarVal">0</span></div>
+        <div class="lbl" style="margin-top:5px;">Wallet</div>
+        <div style="font-family:'Space Mono',monospace;font-size:12px;color:var(--brass-br);font-weight:700;"><span id="vtrcVal">1000</span> vTRC</div>
         <div class="timeval" id="timeVal" style="margin-top:2px;">0.0s</div>
       </div>
     </div>
@@ -178,7 +180,7 @@
       <div class="gtitle">HOW TO PLAY</div>
       <div class="gsec"><b>MOVE</b><span>PC: WASD or arrow keys · Phone: left thumb-stick</span></div>
       <div class="gsec"><b>AIM &amp; FIRE</b><span>PC: mouse to aim, hold left-click to fire · Phone: right thumb-stick to aim + fire</span></div>
-      <div class="gsec"><b>YOUR BAG IS YOUR GUN</b><span>Tap a token up top to ape it — its market cap sets your gun tier. No bag = a weak pistol.</span></div>
+      <div class="gsec"><b>YOUR BAG IS YOUR GUN</b><span>You start each run with 1,000 vTRC. Tap MARKET, pick a token, and choose how much to ape — <b>the value of your position sets your gun tier</b>. Bigger bag, bigger gun. Sell any time to bank vTRC. Rug and it's gone. Kills pay +5 vTRC and each new room pays a bonus, so you're never fully stranded.</span></div>
       <div class="gsec"><b>RUG &amp; RECOVER</b><span>Tokens rug live. Hold through the rug and the bounce re-arms you — bail and you're a jeet.</span></div>
       <div class="gsec"><b>BOMB</b><span>Fills as you rack up kills. Trigger with the on-screen BOMB button or the <b>E</b> key when ready.</span></div>
       <div class="gsec"><b>HEAL</b><span>Grab the glowing ORB to restore morale.</span></div>
@@ -319,15 +321,26 @@ const broSpr={},broWht=whiteSprite(BRO);for(const k in CLASSES)broSpr[k]=makeSpr
 const BEAR_S=makeSprite(BEAR),BEAR_W=whiteSprite(BEAR),RUG_S=makeSprite(RUGGER),RUG_W=whiteSprite(RUGGER),RBRO_S=makeSprite(RBRO),RBRO_W=whiteSprite(RBRO);
 const GUNS=[{name:'PISTOL',dmg:13,cd:0.30,bspd:580,bsz:3,pierce:0,col:'#ffd27a',core:'#ff5a26',spread:0.03},{name:'SMG',dmg:9,cd:0.10,bspd:660,bsz:3,pierce:0,col:'#ffd27a',core:'#ff7a2c',spread:0.13},{name:'RIFLE',dmg:27,cd:0.21,bspd:780,bsz:4,pierce:1,col:'#ffe0a0',core:'#ff5a26',spread:0.04},{name:'LASER',dmg:46,cd:0.14,bspd:1000,bsz:4,pierce:2,col:'#bff4ff',core:'#39c6e0',spread:0.02},{name:'CANNON',dmg:88,cd:0.11,bspd:900,bsz:7,pierce:4,col:'#ffd27a',core:'#ff3b2f',spread:0.05}];
 const GUN_FLOOR=2000;
+// ---- vTRC: the in-run wallet. Your bag SIZE is your firepower. ----
+const VTRC_START=1000;          // every run begins here
+const VTRC_PER_KILL=5;          // trickle so a rug never strands you
+const VTRC_ROOM_BONUS=100;      // x depth, for pushing deeper
+const VTRC_MIN_APE=25;          // smallest position worth taking
+const ARMED_MIN_VALUE=50;       // below this your position is too small to be a real gun
+// Gun tier now comes from what your POSITION IS WORTH, not the token's market cap —
+// so a tiny ape on a huge token doesn't hand you a cannon. Size matters.
+function tierFromValue(v){return v<150?0:v<400?1:v<1000?2:v<2500?3:4;}
+function heldValue(){const t=curHeldToken();if(!held||!t||!t.alive||t.rugged)return 0;
+  return held.size*(t.mc/held.entryMc);}
 function tierFromMC(mc){return mc<25e3?0:mc<100e3?1:mc<500e3?2:mc<2e6?3:4;}
 
 /* ===================== MARKET / TOKENS ===================== */
 const TICKERS=['$COPE','$REKT','$WAGMI','$NGMI','$JEET','$BTFD','$MOON','$DUMP','$HODL','$APE','$FOMO','$SER','$GM','$BONK','$WICK'];
-let market=[],tickAcc=0,held=null;
+let market=[],tickAcc=0,held=null,vtrc=VTRC_START;
 function fmtMC(v){if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(2)+'M';if(v>=1e3)return '$'+(v/1e3).toFixed(1)+'K';return '$'+Math.round(v);}
-function spawnToken(){if(market.length>=10)return;const used=market.map(t=>t.ticker);const pool=TICKERS.filter(t=>!used.includes(t));const tk=pool.length?pool[Math.floor(Math.random()*pool.length)]:'$'+Math.random().toString(36).slice(2,5).toUpperCase();const roll=Math.random();const fate=roll<0.22?'rug':roll<0.5?'bleeder':roll<0.76?'chop':'runner';const base=6e3+Math.random()*70e3;market.push({ticker:tk,mc:base,base,fate,age:0,rugAt:5+Math.random()*9,rugged:false,recoverAt:0,willRecover:false,last:0,trend:0,alive:true});}
+function spawnToken(){if(market.length>=10)return;const used=market.map(t=>t.ticker);const pool=TICKERS.filter(t=>!used.includes(t));const tk=pool.length?pool[Math.floor(Math.random()*pool.length)]:'$'+Math.random().toString(36).slice(2,5).toUpperCase();const roll=Math.random();const fate=roll<0.10?'rug':roll<0.42?'bleeder':roll<0.72?'chop':'runner';const base=6e3+Math.random()*70e3;market.push({ticker:tk,mc:base,base,fate,age:0,rugAt:5+Math.random()*9,rugged:false,recoverAt:0,willRecover:false,last:0,trend:0,alive:true});}
 function curHeldToken(){return held?market.find(t=>t.ticker===held.ticker):null;}
-function isArmed(){const t=curHeldToken();return !!(t&&t.alive&&!t.rugged&&t.mc>=GUN_FLOOR);}
+function isArmed(){const t=curHeldToken();return !!(t&&t.alive&&!t.rugged&&heldValue()>=ARMED_MIN_VALUE);}
 function tickMarket(){
   for(const t of market){
     t.last=t.mc;t.age+=0.3;
@@ -346,13 +359,31 @@ function tickMarket(){
   refreshMarket();
 }
 function apeToken(idx){const t=market[idx];if(!t||!t.alive||t.rugged)return;if(held&&held.ticker===t.ticker)return;
+  // You decide the size. Bag size = firepower, so this is the real decision.
+  if(vtrc<VTRC_MIN_APE){floaters.push({x:player.x,y:player.y-32,txt:'NO LIQUIDITY',life:1.2,vy:-30,col:'#ff3b2f'});return;}
+  const maxIn=Math.floor(vtrc);
+  const raw=prompt('APE '+t.ticker+'  ·  MC '+fmtMC(t.mc)+'\nBalance: '+maxIn+' vTRC\nHow much do you want to ape?', String(Math.min(300,maxIn)));
+  if(raw===null)return;
+  let amt=Math.floor(Number(raw));
+  if(!isFinite(amt)||amt<VTRC_MIN_APE){floaters.push({x:player.x,y:player.y-32,txt:'MIN '+VTRC_MIN_APE+' vTRC',life:1.2,vy:-30,col:'#ff3b2f'});return;}
+  if(amt>maxIn)amt=maxIn;
   if(held){ if(held.pendingRug)bailedOnRug++; sellHeld(true); apes++; }
-  held={ticker:t.ticker,entryMc:t.mc,pendingRug:false};
-  AudioFX.sfx.shoot();floaters.push({x:player.x,y:player.y-32,txt:'APED '+t.ticker,life:1,vy:-30,col:'#e7c87e'});refreshHUD();
-  // close the market once you've picked — keeps the screen clear mid-fight
+  vtrc-=amt;
+  held={ticker:t.ticker,entryMc:t.mc,size:amt,pendingRug:false};
+  AudioFX.sfx.shoot();floaters.push({x:player.x,y:player.y-32,txt:'APED '+amt+' vTRC',life:1.1,vy:-30,col:'#e7c87e'});refreshHUD();
   const mEl=document.getElementById('market'),mTab=document.getElementById('marketTab');
   if(mEl&&mTab){mEl.classList.remove('on');mTab.classList.remove('open');mTab.textContent='⚔ MARKET';}}
-function sellHeld(silent){if(!held)return;const t=curHeldToken();if(t){const profit=t.mc-held.entryMc;if(profit>0){const s=Math.max(1,Math.round(profit/2000));scars+=s;sells++;if(!silent)floaters.push({x:player.x,y:player.y-32,txt:'+'+s+' SOLD',life:1,vy:-34,col:'#9bb04f'});}else{lossSells++;sells++;}}
+function sellHeld(silent){if(!held)return;const t=curHeldToken();
+  // Position value returns to your wallet. Scars come from COMBAT only — trading
+  // makes you powerful, fighting makes you scored.
+  let back=0;
+  if(t&&t.alive&&!t.rugged){ back=Math.max(0,Math.round(held.size*(t.mc/held.entryMc))); }
+  const pnl=back-held.size;
+  vtrc+=back;
+  if(back>0){sells++;
+    if(!silent)floaters.push({x:player.x,y:player.y-32,txt:(pnl>=0?'+':'')+pnl+' vTRC',life:1.2,vy:-34,col:pnl>=0?'#9bb04f':'#ff8a4a'});}
+  else {lossSells++;sells++;
+    if(!silent)floaters.push({x:player.x,y:player.y-32,txt:'-'+held.size+' vTRC',life:1.2,vy:-34,col:'#ff3b2f'});}
   if(!silent&&held.pendingRug)bailedOnRug++;
   held=null;refreshHUD();}
 function markHeldRugged(){ if(!held||held.pendingRug)return; held.pendingRug=true;held.rugTime=elapsed; shake=Math.min(16,shake+9);dmgFlash=0.6;AudioFX.sfx.rug();floaters.push({x:player.x,y:player.y-32,txt:'RUGGED!',life:1.2,vy:-30,col:'#ff3b2f'});refreshHUD(); }
@@ -414,7 +445,7 @@ function enterRoom(d){
   genCover();
   player.hp=Math.min(player.maxhp,Math.max(player.hp,Math.round(player.maxhp*0.75)));player.invuln=3.2;doorWasOpen=false;orbTimer=0;
   spawnOrb();
-  if(d>1){const b=10*(d-1);scars+=b;floaters.push({x:W/2,y:H/2,txt:'+'+b+' PUSHED DEEPER',life:1.2,vy:-26,col:'#9bb04f'});}
+  if(d>1){const b=10*(d-1);scars+=b;const vb=VTRC_ROOM_BONUS*d;vtrc+=vb;floaters.push({x:W/2,y:H/2,txt:'+'+b+' PUSHED DEEPER',life:1.2,vy:-26,col:'#9bb04f'});floaters.push({x:W/2,y:H/2+26,txt:'+'+vb+' vTRC',life:1.4,vy:-22,col:'#e7c87e'});}
   roomScarBase=scars;
   AudioFX.sfx.door();
   document.getElementById('terrName').textContent=T.name;document.getElementById('depVal').textContent='DEPTH '+d;
@@ -432,7 +463,7 @@ function startGame(cls){
   const hb=isHolder?1.25:1;   // NFT holder booster: +25% morale
   player={x:W/2,y:H/2,hp:Math.round(C.maxHP*hb),maxhp:Math.round(C.maxHP*hb),hitFlash:0,invuln:0,face:1,bob:0,muzzle:0,aim:0,swing:0,bombCharge:0};
   genCover();
-  bears.length=0;bullets.length=0;ebullets.length=0;parts.length=0;floaters.length=0;market.length=0;held=null;orb=null;bombs.length=0;blasts.length=0;
+  bears.length=0;bullets.length=0;ebullets.length=0;parts.length=0;floaters.length=0;market.length=0;held=null;vtrc=VTRC_START;orb=null;bombs.length=0;blasts.length=0;
   for(let i=0;i<6;i++)spawnToken();
   elapsed=0;scars=0;kills=0;spawnTimer=2.4;fireTimer=0;meleeTimer=0;shake=0;dmgFlash=0;tickAcc=0;
   depth=1;depthMax=1;territory='bear';roomTime=0;doorCD=1.3;fadeA=0.8;doorWasOpen=false;healCD=0;
@@ -509,7 +540,7 @@ function update(dt){
   const armed=isArmed();
   fireTimer-=dt;meleeTimer-=dt;if(player.swing>0)player.swing-=dt;
   if(fire&&armed){
-    if(fireTimer<=0){const ht=curHeldToken(),tier=tierFromMC(ht.mc),G=GUNS[tier];fireTimer=G.cd*C.cdMul;const a=aim+(Math.random()-0.5)*G.spread*2,tip=18+tier*3;
+    if(fireTimer<=0){const ht=curHeldToken(),tier=tierFromValue(heldValue()),G=GUNS[tier];fireTimer=G.cd*C.cdMul;const a=aim+(Math.random()-0.5)*G.spread*2,tip=18+tier*3;
       bullets.push({x:player.x+Math.cos(a)*tip,y:player.y+Math.sin(a)*tip,vx:Math.cos(a)*G.bspd,vy:Math.sin(a)*G.bspd,dmg:G.dmg*C.dmgMul,life:1,pierce:G.pierce,bsz:G.bsz,col:G.col,core:G.core,ang:a,hit:[]});
       player.muzzle=0.05;AudioFX.sfx.shoot();
       for(let i=0;i<3;i++)parts.push({x:player.x+Math.cos(a)*tip,y:player.y+Math.sin(a)*tip,vx:Math.cos(a)*120+(Math.random()-.5)*90,vy:Math.sin(a)*120+(Math.random()-.5)*90,life:0.12,col:G.core,sz:2});}
@@ -606,7 +637,7 @@ function update(dt){
       if(player.hp<=0){player.hp=0;gameOver();return;}
     }
     if(b.hp<=0){let val=14;if(b.kind==='bear')val=b.type==='heavy'?25:b.type==='fast'?8:14;else if(b.kind==='rugger')val=30;else if(b.kind==='rbro')val=20;
-      scars+=val;kills++;player.bombCharge=Math.min(1,player.bombCharge+(isHolder?1.4:1)/BOMB_KILLS);
+      scars+=val;kills++;vtrc+=VTRC_PER_KILL;player.bombCharge=Math.min(1,player.bombCharge+(isHolder?1.4:1)/BOMB_KILLS);
       if(b.kind==='rbro'&&b.stolen){scars+=b.stolen;floaters.push({x:b.x,y:b.y,txt:'+'+b.stolen+' BACK',life:.9,vy:-40,col:'#9bb04f'});}
       if(dPlayer<130)closeKills++;else farKills++;
       floaters.push({x:b.x,y:b.y,txt:'+'+val,life:.8,vy:-40,col:'#e7c87e'});
@@ -648,7 +679,7 @@ function throwBomb(){
 function drawFloor(){const T=36;const vw=cv.width/zoom,vh=cv.height/zoom;const x0=Math.floor(camX/T)-1,x1=Math.ceil((camX+vw)/T)+1,y0=Math.floor(camY/T)-1,y1=Math.ceil((camY+vh)/T)+1;for(let ty=y0;ty<y1;ty++)for(let tx=x0;tx<x1;tx++){const h=((tx*73856093)^(ty*19349663))>>>0;const v=h%100;ctx.fillStyle=v<50?'#1b1912':v<82?'#201d15':'#171510';ctx.fillRect(tx*T,ty*T,T,T);ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(tx*T,ty*T,T,2);ctx.fillRect(tx*T,ty*T,2,T);if(v>=90){ctx.fillStyle='#100e09';ctx.fillRect(tx*T+10,ty*T+12,T-20,T-20);}}}
 function blit(spr,cx,cy,scale,face,fl,flash){const w=spr.width*scale,h=spr.height*scale;ctx.save();ctx.translate(Math.round(cx),Math.round(cy));if(face<0)ctx.scale(-1,1);ctx.drawImage(spr,-w/2,-h/2,w,h);if(flash>0&&fl){ctx.globalAlpha=Math.min(1,flash*6);ctx.drawImage(fl,-w/2,-h/2,w,h);ctx.globalAlpha=1;}ctx.restore();}
 function label(txt,x,y,col){ctx.font='700 10px Oswald';ctx.textAlign='center';ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillText(txt,x+1,y+1);ctx.fillStyle=col;ctx.fillText(txt,x,y);}
-function drawGun(){const ht=curHeldToken();if(!isArmed())return;const tier=tierFromMC(ht.mc);const spr=GUNSPR[tier];const a=player.aim,s=2.6,w=spr.width*s,h=spr.height*s;ctx.save();ctx.translate(Math.round(player.x),Math.round(player.y+2));ctx.rotate(a);if(Math.cos(a)<0)ctx.scale(1,-1);ctx.drawImage(spr,4,-h/2,w,h);ctx.restore();if(player.muzzle>0){const tip=18+tier*3,mx=player.x+Math.cos(a)*tip,my=player.y+Math.sin(a)*tip;ctx.fillStyle=GUNS[tier].col;ctx.beginPath();ctx.arc(mx,my,5+tier,0,6.3);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(mx,my,2+tier*0.4,0,6.3);ctx.fill();}}
+function drawGun(){const ht=curHeldToken();if(!isArmed())return;const tier=tierFromValue(heldValue());const spr=GUNSPR[tier];const a=player.aim,s=2.6,w=spr.width*s,h=spr.height*s;ctx.save();ctx.translate(Math.round(player.x),Math.round(player.y+2));ctx.rotate(a);if(Math.cos(a)<0)ctx.scale(1,-1);ctx.drawImage(spr,4,-h/2,w,h);ctx.restore();if(player.muzzle>0){const tip=18+tier*3,mx=player.x+Math.cos(a)*tip,my=player.y+Math.sin(a)*tip;ctx.fillStyle=GUNS[tier].col;ctx.beginPath();ctx.arc(mx,my,5+tier,0,6.3);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(mx,my,2+tier*0.4,0,6.3);ctx.fill();}}
 function drawChevron(cx,cy,s){ctx.beginPath();ctx.moveTo(cx-s,cy+s*0.55);ctx.lineTo(cx,cy-s*0.45);ctx.lineTo(cx+s,cy+s*0.55);ctx.lineTo(cx+s,cy+s*0.55+3);ctx.lineTo(cx,cy-s*0.45+3);ctx.lineTo(cx-s,cy+s*0.55+3);ctx.closePath();ctx.fill();}
 function drawMelee(){ if(isArmed())return; const a=player.aim;
   const sw=player.swing>0?(player.swing/0.2):0;
@@ -767,11 +798,12 @@ document.getElementById('marketTab').addEventListener('click',e=>{
 function refreshMarket(){if(state!=='playing'){marketEl.innerHTML='';return;}let html='';market.forEach((t,i)=>{const up=t.trend>=0,isHeld=held&&held.ticker===t.ticker;const cls='chip'+(isHeld?' held':'')+(t.rugged?' rug':'');html+=`<div class="${cls}" data-i="${i}"><div class="tk">${t.ticker}</div><div class="mc ${up?'up':'dn'}">${t.rugged?'RUGGED':fmtMC(t.mc)} ${t.rugged?'':(up?'▲':'▼')}</div></div>`;});marketEl.innerHTML=html;[...marketEl.children].forEach(ch=>ch.addEventListener('click',()=>apeToken(+ch.dataset.i)));}
 function refreshHUD(){
   document.getElementById('scarVal').textContent=scars;document.getElementById('timeVal').textContent=elapsed.toFixed(1)+'s';
+  const vEl=document.getElementById('vtrcVal');if(vEl)vEl.textContent=Math.floor(vtrc);
   const pct=Math.max(0,player.hp/player.maxhp),fill=document.getElementById('hpFill');fill.style.width=(pct*100)+'%';fill.classList.toggle('low',pct<0.3);
   document.getElementById('dmgflash').style.opacity=dmgFlash*0.5;
   const ht=curHeldToken(),gn=document.getElementById('gunName'),gs=document.getElementById('gunSub'),pl=document.getElementById('gunPL'),sb=document.getElementById('sellBtn'),ua=document.getElementById('unarmed');
   if(held&&held.pendingRug){gn.textContent='SWORD';gn.className='gun rug';gs.textContent=held.ticker+' rugged · hold for bounce or bail';pl.textContent='swinging steel';pl.className='pl dn';sb.style.display='block';ua.style.display='none';}
-  else if(isArmed()){const tier=tierFromMC(ht.mc);gn.textContent=GUNS[tier].name;gn.className='gun t'+(tier+1);gs.textContent=held.ticker+' · '+fmtMC(ht.mc);const pp=((ht.mc-held.entryMc)/held.entryMc)*100;pl.textContent=(pp>=0?'+':'')+pp.toFixed(0)+'%';pl.className='pl '+(pp>=0?'up':'dn');sb.style.display='block';ua.style.display='none';}
+  else if(isArmed()){const tier=tierFromValue(heldValue());gn.textContent=GUNS[tier].name;gn.className='gun t'+(tier+1);const hv=Math.round(heldValue());gs.textContent=held.ticker+' · bag '+hv+' vTRC';const pp=((hv-held.size)/held.size)*100;pl.textContent=(pp>=0?'+':'')+pp.toFixed(0)+'%';pl.className='pl '+(pp>=0?'up':'dn');sb.style.display='block';ua.style.display='none';}
   else {gn.textContent='SWORD';gn.className='gun rug';gs.textContent='no bag — ape a token to arm up';pl.textContent='';sb.style.display='none';ua.style.display='block';}
   // bomb meter
   const bb=document.getElementById('bombBtn'),bf=document.getElementById('bombFill'),blab=document.getElementById('bombLabel');

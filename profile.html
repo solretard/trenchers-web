@@ -303,7 +303,7 @@ async function loadNftGallery(wallet){
 
   let data;
   try{
-    const r = await fetch(BACKEND + '/nft/list/' + wallet + '?limit=12');
+    const r = await fetch(API + '/nft/list/' + wallet + '?limit=12');
     data = await r.json();
   }catch(e){
     grid.textContent = 'Could not reach the server to load your NFTs.';

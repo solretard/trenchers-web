@@ -59,6 +59,17 @@
   .out{color:var(--flare);font-family:'Space Mono',monospace;font-size:12px;}
 
   .formula{font-family:'Space Mono',monospace;font-size:11px;color:var(--bone-dim);line-height:1.9;}
+  /* the actual NFTs this wallet holds */
+  .nftgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;margin-top:16px;}
+  .nftcard{background:#14120c;border:1px solid rgba(200,155,74,.28);overflow:hidden;}
+  .nftcard img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#0d0c08;}
+  .nftcard .nid{font-family:'Space Mono',monospace;font-size:9px;color:var(--brass-br);
+    text-align:center;padding:5px 2px;letter-spacing:.04em;}
+  .nftmore{grid-column:1/-1;font-family:'Space Mono',monospace;font-size:10px;
+    color:var(--bone-dim);text-align:center;padding:4px;}
+  .nftempty{font-family:'Space Mono',monospace;font-size:11px;color:var(--bone-dim);
+    margin-top:14px;padding:14px;border:1px dashed rgba(200,155,74,.25);text-align:center;line-height:1.7;}
+  .nftempty a{color:var(--brass-br);}
   .formula b{color:var(--brass-br);}
 
   .msg{text-align:center;padding:50px 20px;color:var(--bone-dim);font-family:'Space Mono',monospace;font-size:13px;line-height:1.9;}
@@ -172,6 +183,7 @@
           <div class="n">capped at 2.0× (10 NFTs)</div>
         </div>
       </div>
+      <div id="nftGallery" class="nftgrid"></div>
       <div class="formula" style="margin-top:14px;">
         XP = (scars × <b>0.3</b> + PvP wins × <b>100</b>) × <b>NFT multiplier</b><br>
         Each week, the top <b>30</b> share <b>1.67%</b> of supply, split by that week's XP.<br>
@@ -246,12 +258,69 @@ async function load(){
 
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('content').classList.remove('hidden');
+    loadNftGallery(wallet);        // images load after the numbers, so stats never wait on IPFS
   }catch(e){
     document.getElementById('loading').textContent =
       'Could not load your record right now. Try again in a moment.';
   }
 }
 load();
+
+/* ---------- NFT gallery ----------
+   XRPL gives us a metadata URI per NFT (usually ipfs://). We resolve that to a
+   gateway, read the `image` field, and resolve that too. Each card renders as
+   soon as its own image is ready, so one slow file never blocks the rest.      */
+const IPFS_GW = 'https://ipfs.io/ipfs/';
+function resolveUri(u){
+  if(!u) return '';
+  if(u.startsWith('ipfs://')) return IPFS_GW + u.slice(7).replace(/^ipfs\//,'');
+  return u;
+}
+async function loadNftGallery(wallet){
+  const grid = document.getElementById('nftGallery');
+  if(!grid || !wallet) return;
+  let data;
+  try{
+    const r = await fetch(BACKEND + '/nft/list/' + wallet + '?limit=12');
+    data = await r.json();
+  }catch(e){ return; }
+
+  if(!data || !data.enabled) return;
+  const items = data.items || [];
+  if(!items.length){
+    grid.className = 'nftempty';
+    grid.innerHTML = "You don't hold any Trenchers NFTs yet.<br>"
+      + 'Holding one unlocks the DIAMOND and SNIPER classes and boosts your XP.';
+    return;
+  }
+
+  // The backend already resolved each image URL (it follows the metadata itself,
+  // which avoids the browser hitting IPFS gateways and tripping CORS).
+  grid.className = 'nftgrid';
+  grid.innerHTML = '';
+  items.forEach(n => {
+    if(!n.image) return;
+    const card = document.createElement('div');
+    card.className = 'nftcard';
+    const img = document.createElement('img');
+    img.alt = 'Trenchers NFT';
+    img.loading = 'lazy';
+    img.src = n.image;
+    img.onerror = () => card.remove();
+    const nid = document.createElement('div');
+    nid.className = 'nid';
+    nid.textContent = '#' + (n.serial ?? '?');
+    card.appendChild(img); card.appendChild(nid);
+    grid.appendChild(card);
+  });
+
+  if(data.count > items.length){
+    const more = document.createElement('div');
+    more.className = 'nftmore';
+    more.textContent = '+ ' + (data.count - items.length) + ' more';
+    grid.appendChild(more);
+  }
+}
 </script>
 </body>
 </html>

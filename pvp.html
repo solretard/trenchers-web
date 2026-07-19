@@ -46,6 +46,8 @@
   #war .h{font-family:'Oswald';font-weight:700;font-size:9px;letter-spacing:2px;color:var(--bone-dim);margin-bottom:3px;}
   #war .r{display:flex;justify-content:space-between;gap:10px;line-height:1.5;}
   .fchips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:340px;}
+  .fchip.locked{opacity:.42;cursor:not-allowed;}
+  .fchip .lk{font-size:9px;}
   .fchip{cursor:pointer;border:1px solid rgba(200,155,74,.4);background:#0c0b07;color:var(--bone);font-family:'Oswald';font-weight:600;font-size:12px;letter-spacing:1px;padding:7px 13px;}
   .fchip.sel{color:#100f0a;}
   #waiting{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;background:radial-gradient(ellipse at 50% 40%,rgba(40,36,22,.55),rgba(8,7,4,.93) 75%);}
@@ -135,6 +137,17 @@
     <div class="fchips" id="fchips"></div>
     <input id="roomIn" maxlength="8" placeholder="ROOM CODE" />
     <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);letter-spacing:1px;margin-top:4px;">
+      CLASS
+    </div>
+    <div id="clsChips" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+      <div class="fchip sel" data-c="aper">APER</div>
+      <div class="fchip" data-c="diamond">DIAMOND <span class="lk">🔒</span></div>
+      <div class="fchip" data-c="sniper">SNIPER <span class="lk">🔒</span></div>
+    </div>
+    <div id="clsNote" style="font-family:'Space Mono',monospace;font-size:9px;color:var(--bone-dim);opacity:.75;">
+      DIAMOND &amp; SNIPER need a Trenchers NFT
+    </div>
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);letter-spacing:1px;margin-top:4px;">
       MAP <span style="opacity:.6;">— applies if you're first into the room</span>
     </div>
     <div id="mapChips" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
@@ -174,6 +187,9 @@ const REALTIME_URL = "wss://web-production-cd223.up.railway.app";
 
 // must match server
 const SPEED=230, MOVE_STEP=1/30, SEND_MS=33, INTERP_DELAY=100;
+// must match PVP_CLASSES on the server
+const CLS_SPD={aper:1.00,diamond:0.88,sniper:0.96};
+function mySpeed(){ return SPEED*(CLS_SPD[myClass]||1); }
 
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 let W=1920,H=1080;                 // world size (updated from server welcome)
@@ -227,6 +243,36 @@ const HERO={};for(const f in FAC_PAL)HERO[f]=makeSprite(BRO,FAC_PAL[f]);
 const SP_SCALE=3.0;
 let myFaction='DIAMONDS';
 let myMap='trenchline';   // only used if you're the first into the room
+let myClass='aper';
+let nftCount=0;
+const API_URL="https://web-production-e7758.up.railway.app";
+
+async function refreshPvpNft(){
+  const w=connectedWallet();
+  if(!w){paintClassChips();return;}
+  try{
+    const r=await fetch(API_URL+'/nft/holder/'+w);
+    const d=await r.json();
+    nftCount=(d&&d.count)||0;
+  }catch(e){nftCount=0;}
+  paintClassChips();
+}
+function paintClassChips(){
+  const wrap=document.getElementById('clsChips'); if(!wrap)return;
+  const holder=nftCount>0;
+  [...wrap.querySelectorAll('.fchip')].forEach(c=>{
+    const k=c.getAttribute('data-c');
+    const locked=(k!=='aper')&&!holder;
+    c.classList.toggle('locked',locked);
+    const lk=c.querySelector('.lk'); if(lk)lk.style.display=locked?'inline':'none';
+    if(locked&&myClass===k){myClass='aper';}
+    c.classList.toggle('sel',k===myClass);
+  });
+  const note=document.getElementById('clsNote');
+  if(note)note.textContent = holder
+    ? 'NFT verified — all classes unlocked ('+nftCount+' held)'
+    : 'DIAMOND & SNIPER need a Trenchers NFT';
+}
 let curMap='trenchline';  // what the room is actually running
 
 // Each map gets its own look, the same way Solo territories do.
@@ -353,7 +399,7 @@ function join(){
   const url=REALTIME_URL.replace(/\/$/,'')+'/ws/'+encodeURIComponent(room)+'?map='+encodeURIComponent(myMap);
   setStatus('connecting…',false);
   try{ws=new WebSocket(url);}catch(e){err.textContent='bad server URL';return;}
-  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
+  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'class',cls:myClass}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
   ws.onmessage=(ev)=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
     if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();if(m.map){curMap=m.map;setStatus('connected · room '+roomCode+' · '+String(m.map).toUpperCase()+(m.host?' (you set the map)':''),true);}}
     else if(m.t==='state'){onState(m);}
@@ -366,6 +412,17 @@ function join(){
 // Everyone deploys with the same PISTOL — you buy your way up from the market
 // mid-fight, so no one gets an edge before the match even starts.
 const myLoadout=0;
+(function(){
+  const wrap=document.getElementById('clsChips');
+  if(wrap){
+    wrap.addEventListener('click',e=>{
+      const c=e.target.closest('.fchip'); if(!c||c.classList.contains('locked'))return;
+      myClass=c.getAttribute('data-c');
+      paintClassChips();
+    });
+  }
+  refreshPvpNft();
+})();
 (function(){
   const wrap=document.getElementById('mapChips');
   if(!wrap)return;
@@ -488,9 +545,9 @@ function onState(m){
       pred={x:p.x,y:p.y};
       if(p.alive){
         for(const i of pending){
-          const cx=clampx(pred.x+i.dx*SPEED*MOVE_STEP);
+          const cx=clampx(pred.x+i.dx*mySpeed()*MOVE_STEP);
           if(!blocked(cx,pred.y))pred.x=cx;
-          const cy=clampy(pred.y+i.dy*SPEED*MOVE_STEP);
+          const cy=clampy(pred.y+i.dy*mySpeed()*MOVE_STEP);
           if(!blocked(pred.x,cy))pred.y=cy;
         }
       } else { pending=[]; }
@@ -565,9 +622,9 @@ function startInputLoop(){
     // ----- client-side prediction: move myself now (with cover collision) -----
     if(pred&&myAlive){
       let nx=dx,ny=dy;const mg=Math.hypot(nx,ny);if(mg>1){nx/=mg;ny/=mg;}
-      const cx=clampx(pred.x+nx*SPEED*MOVE_STEP);
+      const cx=clampx(pred.x+nx*mySpeed()*MOVE_STEP);
       if(!blocked(cx,pred.y))pred.x=cx;
-      const cy=clampy(pred.y+ny*SPEED*MOVE_STEP);
+      const cy=clampy(pred.y+ny*mySpeed()*MOVE_STEP);
       if(!blocked(pred.x,cy))pred.y=cy;
       pending.push({seq:inputSeq,dx:nx,dy:ny});
       if(pending.length>120)pending.shift();

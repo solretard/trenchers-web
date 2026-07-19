@@ -146,7 +146,7 @@
       <div class="gtitle">HOW TO PLAY</div>
       <div class="gsec"><b>MOVE</b><span>PC: WASD or arrow keys · Phone: left thumb-stick</span></div>
       <div class="gsec"><b>AIM &amp; FIRE</b><span>PC: mouse to aim, hold left-click to fire · Phone: right thumb-stick to aim + fire</span></div>
-      <div class="gsec"><b>LOADOUT</b><span>Pick your starting gun before you deploy. LASER &amp; CANNON aren't in the loadout — you earn those in-match.</span></div>
+      <div class="gsec"><b>YOUR GUN</b><span>Everyone drops in with a PISTOL. Ape a live token from the market mid-fight to upgrade — SMG, RIFLE, LASER and CANNON are all earned in-match, never handed out.</span></div>
       <div class="gsec"><b>YOUR BAG IS YOUR GUN</b><span>Tap the <b>⚔ MARKET</b> tab, ape a token — its market cap sets your gun tier. Tokens rug and recover live, so keep an eye on the market.</span></div>
       <div class="gsec"><b>COVER</b><span>Crates block bullets. Duck behind them to break line of sight.</span></div>
       <div class="gsec"><b>FACTIONS</b><span>Your bullets carry your faction's colour. Winning a round scores a point for your faction in the war.</span></div>
@@ -155,13 +155,6 @@
     </div>
   </div>
 
-  <div id="loadout">
-    <a href="#" class="backlink" id="loadoutBack">← BACK</a>
-    <div class="title">CHOOSE YOUR <span class="b">LOADOUT</span></div>
-    <div class="sub">Pick the gun you drop in with. Ape a live token mid-fight to upgrade past it — LASER and CANNON are earned, not handed out.</div>
-    <div class="guncards" id="gunCards"></div>
-    <button class="btn" id="deployBtn">DEPLOY</button>
-  </div>
 </div>
 
 <script>
@@ -336,7 +329,7 @@ function join(){
   const url=REALTIME_URL.replace(/\/$/,'')+'/ws/'+encodeURIComponent(room);
   setStatus('connecting…',false);
   try{ws=new WebSocket(url);}catch(e){err.textContent='bad server URL';return;}
-  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('loadout').classList.remove('on');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
+  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
   ws.onmessage=(ev)=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
     if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();}
     else if(m.t==='state'){onState(m);}
@@ -345,41 +338,21 @@ function join(){
   ws.onclose=()=>{connected=false;setStatus('disconnected',false);};
   ws.onerror=()=>{document.getElementById('err').textContent='could not reach server — is it running?';setStatus('error',false);};
 }
-// ---- loadout screen ----
-let myLoadout=0;
-const GUN_INFO=[
-  {n:'PISTOL',s:'Reliable single shot. Balanced.'},
-  {n:'SMG',s:'Fast spray. Low dmg, high rate.'},
-  {n:'RIFLE',s:'Hard-hitting single shots.'}
-];
-function buildGunCards(){
-  const wrap=document.getElementById('gunCards');if(!wrap)return;wrap.innerHTML='';
-  GUN_INFO.forEach((g,i)=>{
-    const c=document.createElement('div');c.className='guncard'+(i===myLoadout?' sel':'');
-    const cc=document.createElement('canvas');cc.width=84;cc.height=46;const x=cc.getContext('2d');x.imageSmoothingEnabled=false;
-    const spr=GUNSPR[i],s=6,sw=spr.width*s,sh=spr.height*s;x.drawImage(spr,(84-sw)/2,(46-sh)/2,sw,sh);
-    c.appendChild(cc);
-    const nm=document.createElement('div');nm.className='gn';nm.textContent=g.n;c.appendChild(nm);
-    const ds=document.createElement('div');ds.className='gs';ds.textContent=g.s;c.appendChild(ds);
-    c.addEventListener('click',()=>{myLoadout=i;buildGunCards();});
-    wrap.appendChild(c);
-  });
-}
-buildGunCards();
-function showLoadout(){
+// ---- deploy ----
+// Everyone deploys with the same PISTOL — you buy your way up from the market
+// mid-fight, so no one gets an edge before the match even starts.
+const myLoadout=0;
+function tryJoin(){
   const room=(document.getElementById('roomIn').value||'').trim();
   const err=document.getElementById('err');
   if(!room){err.textContent='enter a room code';return;}
   err.textContent='';
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('loadout').classList.add('on');
+  join();                      // straight into the match — guns are bought in-fight
 }
-document.getElementById('joinBtn').addEventListener('click',showLoadout);
+document.getElementById('joinBtn').addEventListener('click',tryJoin);
 document.getElementById('guideBtn').addEventListener('click',()=>document.getElementById('guide').classList.add('on'));
 document.getElementById('guideX').addEventListener('click',()=>document.getElementById('guide').classList.remove('on'));
 document.getElementById('guide').addEventListener('click',e=>{if(e.target.id==='guide')document.getElementById('guide').classList.remove('on');});
-document.getElementById('deployBtn').addEventListener('click',join);
-document.getElementById('loadoutBack').addEventListener('click',e=>{e.preventDefault();document.getElementById('loadout').classList.remove('on');document.getElementById('lobby').classList.remove('hidden');});
 // market hidden by default, toggled by the tab
 document.getElementById('marketTab').addEventListener('click',()=>document.getElementById('market').classList.toggle('open'));
 function leaveMatch(){
@@ -389,7 +362,7 @@ function leaveMatch(){
   document.getElementById('leaveBtn').classList.remove('show');
   document.getElementById('market').classList.remove('open');
   document.getElementById('war').style.display='none';
-  document.getElementById('loadout').classList.remove('on');
+  
   document.getElementById('lobby').classList.remove('hidden');
   setStatus('left the room',false);
 }

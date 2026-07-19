@@ -555,13 +555,14 @@ setInterval(()=>{
 },250);
 
 // ---- auto-join from an invite link (?room=CODE) ----
-(function autoJoinFromURL(){
+(function prefillFromURL(){
+  // An invite link fills in the room code but does NOT drop you straight in —
+  // the invited player still has to pick a class (and see which ones their NFTs unlock).
   const r=new URLSearchParams(location.search).get('room');
   if(!r)return;
   document.getElementById('roomIn').value=r.toUpperCase();
-  myFaction=FACTIONS[Math.floor(Math.random()*FACTIONS.length)]; // assign a faction so they drop straight in
-  if(!document.getElementById('nameIn').value)document.getElementById('nameIn').value='trencher';
-  join();
+  const err=document.getElementById('err');
+  if(err)err.textContent='Room '+r.toUpperCase()+' ready — pick your class, then enter.';
 })();
 
 function onState(m){

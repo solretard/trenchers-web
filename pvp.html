@@ -47,16 +47,18 @@
   #war .r{display:flex;justify-content:space-between;gap:10px;line-height:1.5;}
   .fchips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:340px;}
   .fchip.locked{opacity:.42;cursor:not-allowed;}
-  .clscards{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
-  .clscard{position:relative;cursor:pointer;width:104px;padding:9px 8px 10px;text-align:center;
+  .clscards{display:flex;gap:10px;justify-content:center;align-items:flex-start;flex-wrap:wrap;
+    margin:2px 0 4px;flex-shrink:0;}
+  .clscard{position:relative;cursor:pointer;flex:0 0 auto;width:92px;padding:7px 6px 8px;text-align:center;
     background:linear-gradient(180deg,rgba(36,32,21,.95),rgba(18,16,11,.95));
-    border:1px solid rgba(200,155,74,.3);transition:transform .12s,border-color .12s;}
+    border:1px solid rgba(200,155,74,.3);transition:transform .12s,border-color .12s;
+    display:flex;flex-direction:column;align-items:center;}
   .clscard:hover{transform:translateY(-2px);border-color:rgba(231,200,126,.75);}
   .clscard.sel{border-color:#e7c87e;box-shadow:0 0 0 1px #e7c87e inset,0 6px 18px rgba(0,0,0,.5);}
   .clscard canvas{display:block;margin:0 auto;image-rendering:pixelated;}
-  .clscard .cn{font-family:'Oswald';font-weight:700;font-size:13px;letter-spacing:1.5px;color:var(--bone);margin-top:3px;}
+  .clscard .cn{font-family:'Oswald';font-weight:700;font-size:11px;letter-spacing:1px;color:var(--bone);margin-top:3px;line-height:1.1;}
   .clscard .cr{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--bone-dim);}
-  .clscard .cst{font-family:'Space Mono',monospace;font-size:8px;color:var(--brass-br);margin-top:4px;line-height:1.5;}
+  .clscard .cst{font-family:'Space Mono',monospace;font-size:7.5px;color:var(--brass-br);margin-top:4px;line-height:1.35;white-space:nowrap;}
   .clscard.locked{cursor:not-allowed;border-color:rgba(154,144,121,.22);}
   .clscard.locked canvas,.clscard.locked .cn,.clscard.locked .cr,.clscard.locked .cst{opacity:.3;filter:grayscale(1);}
   .clslock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
@@ -84,9 +86,9 @@
   #waiting .wr{font-size:12px;color:var(--bone-dim);letter-spacing:3px;}
   #waiting .pulse{font-size:11px;color:var(--bone-dim);letter-spacing:2px;animation:bl 1.3s ease-in-out infinite;}
   @keyframes bl{0%,100%{opacity:.35}50%{opacity:1}}
-  #lobby{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;background:radial-gradient(ellipse at 50% 30%,rgba(40,36,22,.5),rgba(8,7,4,.95) 75%);}
-  #loadout{position:absolute;inset:0;z-index:8;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:radial-gradient(ellipse at 50% 30%,rgba(40,36,22,.5),rgba(8,7,4,.96) 75%);}
-  #loadout.on{display:flex;}
+  #lobby{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:11px;padding:26px 24px 44px;text-align:center;overflow-y:auto;background:radial-gradient(ellipse at 50% 30%,rgba(40,36,22,.5),rgba(8,7,4,.95) 75%);}
+  #lobby>*{flex-shrink:0;}                 /* never let content squash into itself */
+  #lobby{scrollbar-width:thin;}
   #guideBtn{margin-top:4px;font-family:'Oswald';font-weight:700;letter-spacing:3px;font-size:12px;color:var(--brass-br);background:transparent;border:1px solid rgba(200,155,74,.4);padding:8px 20px;cursor:pointer;}
   #guideBtn:hover{background:rgba(200,155,74,.12);}
   #guide{position:absolute;inset:0;z-index:12;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(6,5,3,.86);}
@@ -155,7 +157,7 @@
       CLASS
     </div>
     <div id="clsCards" class="clscards"></div>
-    <div id="clsNote" style="font-family:'Space Mono',monospace;font-size:9px;color:var(--bone-dim);opacity:.75;">
+    <div id="clsNote" style="font-family:'Space Mono',monospace;font-size:9px;color:var(--bone-dim);opacity:.8;margin-top:2px;">
       DIAMOND &amp; SNIPER need a Trenchers NFT
     </div>
     <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);letter-spacing:1px;margin-top:4px;">
@@ -277,11 +279,25 @@ const PVP_CLS = {
   aper:   {name:'APER',   role:'SPEED', pal:{'u':'#7a4a22','U':'#9a5e2c','p':'#5e3818'},
            stat:'100 HP · fast', gated:false},
   diamond:{name:'DIAMOND',role:'TANK',  pal:{'u':'#566066','U':'#71808a','p':'#3f474c'},
-           stat:'165 HP · +15% dmg', gated:true},
+           stat:'165 HP · +15%', gated:true},
   sniper: {name:'SNIPER', role:'RANGE', pal:{'u':'#37402c','U':'#49562f','p':'#2a311f'},
-           stat:'85 HP · +40% dmg', gated:true}
+           stat:'85 HP · +40%', gated:true}
 };
 const CLS_SPR={}; for(const k in PVP_CLS) CLS_SPR[k]=makeSprite(BRO,PVP_CLS[k].pal);
+
+let _toastT=0;
+function showToast(msg){
+  let el=document.getElementById('toast');
+  if(!el){
+    el=document.createElement('div'); el.id='toast';
+    el.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:99;'
+      +'background:rgba(20,18,12,.96);border:1px solid rgba(255,90,38,.6);color:#e8e0cc;'
+      +"font-family:'Space Mono',monospace;font-size:12px;padding:10px 14px;max-width:88vw;text-align:center;";
+    document.body.appendChild(el);
+  }
+  el.textContent=msg; el.style.display='block';
+  clearTimeout(_toastT); _toastT=setTimeout(()=>{el.style.display='none';},6000);
+}
 
 function paintClassChips(){
   const wrap=document.getElementById('clsCards'); if(!wrap)return;
@@ -293,14 +309,14 @@ function paintClassChips(){
     const card=document.createElement('div');
     card.className='clscard'+(k===myClass?' sel':'')+(locked?' locked':'');
 
-    const cc=document.createElement('canvas');cc.width=62;cc.height=68;
+    const cc=document.createElement('canvas');cc.width=54;cc.height=58;
     const x=cc.getContext('2d');x.imageSmoothingEnabled=false;
-    const g=x.createRadialGradient(31,34,3,31,34,34);
+    const g=x.createRadialGradient(27,29,3,27,29,29);
     g.addColorStop(0,'rgba(200,155,74,0.14)');g.addColorStop(1,'rgba(200,155,74,0)');
-    x.fillStyle=g;x.fillRect(0,0,62,68);
-    const spr=CLS_SPR[k],sc=2.7,sw=spr.width*sc,sh=spr.height*sc;
-    x.fillStyle='rgba(0,0,0,0.35)';x.beginPath();x.ellipse(31,60,sw*0.32,4,0,0,6.3);x.fill();
-    x.drawImage(spr,(62-sw)/2,(68-sh)/2-3,sw,sh);
+    x.fillStyle=g;x.fillRect(0,0,54,58);
+    const spr=CLS_SPR[k],sc=2.3,sw=spr.width*sc,sh=spr.height*sc;
+    x.fillStyle='rgba(0,0,0,0.35)';x.beginPath();x.ellipse(27,51,sw*0.32,3.5,0,0,6.3);x.fill();
+    x.drawImage(spr,(54-sw)/2,(58-sh)/2-2,sw,sh);
     card.appendChild(cc);
 
     const nm=document.createElement('div');nm.className='cn';nm.textContent=C.name;card.appendChild(nm);
@@ -440,6 +456,11 @@ function join(){
     ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'class',cls:myClass}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
   ws.onmessage=(ev)=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
     if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();if(m.map){curMap=m.map;setStatus('connected · room '+roomCode+' · '+String(m.map).toUpperCase()+(m.host?' (you set the map)':''),true);}}
+    else if(m.t==='noxp'){
+      setStatus(m.msg||'No XP will be awarded for this match.',false);
+      const n=document.getElementById('clsNote'); if(n)n.textContent=m.msg||'';
+      showToast(m.msg||'No XP will be awarded for this match.');
+    }
     else if(m.t==='state'){onState(m);}
     else if(m.t==='full'){document.getElementById('err').textContent='room is full';}
   };

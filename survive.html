@@ -481,7 +481,21 @@ function markHeldRugged(){ if(!held||held.pendingRug)return; held.pendingRug=tru
 function devRugHeld(){const t=curHeldToken();if(!t||t.rugged)return;t.fate='rug';t.rugged=true;t.mc=500;t.recoverAt=t.age+(2.5+Math.random()*3.5);t.willRecover=Math.random()<0.6;markHeldRugged();}
 
 /* ===================== STATE ===================== */
-const TERR=[{key:'bear',name:'BEAR FRONT',vil:'BEAR'},{key:'rugger',name:"RUGGERS' TERRITORY",vil:'DEV RUGGER'},{key:'rbro',name:'RUGGED BRO TERRITORY',vil:'RUGGED BRO'}];
+const TERR=[
+  {key:'bear',name:'BEAR FRONT',vil:'BEAR',
+   floor:['#1b1912','#201d15','#171510'],speck:'#100e09',
+   cov:{body:'#6b5836',top:'#8a7245',bot:'#4a3c24',trim:'#c89b4a',brace:'rgba(231,200,126,0.5)'},
+   fog:'rgba(200,155,74,0.05)'},
+  {key:'rugger',name:"RUGGERS' TERRITORY",vil:'DEV RUGGER',
+   floor:['#141a1e','#182027','#111619'],speck:'#0c1013',
+   cov:{body:'#33424c',top:'#475b68',bot:'#222c33',trim:'#39c6e0',brace:'rgba(57,198,224,0.45)'},
+   fog:'rgba(57,198,224,0.05)'},
+  {key:'rbro',name:'RUGGED BRO TERRITORY',vil:'RUGGED BRO',
+   floor:['#1e1410','#251813','#180f0c'],speck:'#120b08',
+   cov:{body:'#5a3128',top:'#754034',bot:'#3d211a',trim:'#ff5a26',brace:'rgba(255,90,38,0.42)'},
+   fog:'rgba(255,90,38,0.06)'}
+];
+function terrDef(){return TERR.find(t=>t.key===territory)||TERR[0];}
 let state='menu',player=null,bears=[],bullets=[],ebullets=[],parts=[],floaters=[],orb=null,bombs=[],blasts=[];
 let chosen='aper',elapsed=0,scars=0,kills=0,spawnTimer=0,fireTimer=0,meleeTimer=0,shake=0,dmgFlash=0,sessionBest=0;
 let depth=1,territory='bear',roomTime=0,doorCD=0,fadeA=0,depthMax=1,roomScarBase=0,orbTimer=0,healCD=0;
@@ -509,24 +523,48 @@ const COVER_PR=18;
 function genCover(){
   cover=[];
   const ox=PADX,oy=PADY,PW=PLAY_W,PH=PLAY_H;
-  const defs=[
-    [ox+PW*0.15,oy+PH*0.30,PW*0.14,26],[ox+PW*0.71,oy+PH*0.30,PW*0.14,26],
-    [ox+PW*0.45,oy+PH*0.30,26,PH*0.17],
-    [ox+PW*0.24,oy+PH*0.56,PW*0.11,24],[ox+PW*0.65,oy+PH*0.56,PW*0.11,24],
-    [ox+PW*0.45,oy+PH*0.66,PW*0.10,24]
-  ];
+  let defs;
+  if(territory==='rugger'){
+    // Ruggers shoot from range — open ground with scattered pillars to duck behind.
+    defs=[
+      [ox+PW*0.12,oy+PH*0.18,26,26],[ox+PW*0.34,oy+PH*0.12,26,26],
+      [ox+PW*0.62,oy+PH*0.16,26,26],[ox+PW*0.84,oy+PH*0.24,26,26],
+      [ox+PW*0.22,oy+PH*0.44,26,PH*0.16],[ox+PW*0.74,oy+PH*0.42,26,PH*0.16],
+      [ox+PW*0.46,oy+PH*0.52,PW*0.09,26],
+      [ox+PW*0.14,oy+PH*0.74,26,26],[ox+PW*0.40,oy+PH*0.78,26,26],
+      [ox+PW*0.68,oy+PH*0.74,26,26],[ox+PW*0.88,oy+PH*0.66,26,26]
+    ];
+  } else if(territory==='rbro'){
+    // Rugged Bros brawl up close — tight broken walls, corridors, ambush corners.
+    defs=[
+      [ox+PW*0.08,oy+PH*0.22,PW*0.26,24],[ox+PW*0.62,oy+PH*0.22,PW*0.28,24],
+      [ox+PW*0.30,oy+PH*0.22,24,PH*0.22],[ox+PW*0.66,oy+PH*0.34,24,PH*0.20],
+      [ox+PW*0.16,oy+PH*0.50,24,PH*0.24],
+      [ox+PW*0.38,oy+PH*0.60,PW*0.24,24],
+      [ox+PW*0.80,oy+PH*0.56,24,PH*0.22],
+      [ox+PW*0.10,oy+PH*0.82,PW*0.20,24],[ox+PW*0.56,oy+PH*0.82,PW*0.22,24]
+    ];
+  } else {
+    // Bear Front — the classic trench line: symmetric fortifications.
+    defs=[
+      [ox+PW*0.15,oy+PH*0.30,PW*0.14,26],[ox+PW*0.71,oy+PH*0.30,PW*0.14,26],
+      [ox+PW*0.45,oy+PH*0.30,26,PH*0.17],
+      [ox+PW*0.24,oy+PH*0.56,PW*0.11,24],[ox+PW*0.65,oy+PH*0.56,PW*0.11,24],
+      [ox+PW*0.45,oy+PH*0.66,PW*0.10,24]
+    ];
+  }
   for(const d of defs)cover.push({x:d[0],y:d[1],w:d[2],h:d[3]});
 }
 function coverBlocked(px,py){for(const c of cover){if(px>=c.x-COVER_PR&&px<=c.x+c.w+COVER_PR&&py>=c.y-COVER_PR&&py<=c.y+c.h+COVER_PR)return true;}return false;}
 function coverInside(px,py){for(const c of cover){if(px>=c.x&&px<=c.x+c.w&&py>=c.y&&py<=c.y+c.h)return true;}return false;}
-function drawCover(){for(const c of cover){
+function drawCover(){const C=terrDef().cov;for(const c of cover){
   ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(c.x-3,c.y+3,c.w+6,c.h+4);          // drop shadow
-  ctx.fillStyle='#6b5836';ctx.fillRect(c.x,c.y,c.w,c.h);                            // crate body (warm wood)
-  ctx.fillStyle='#8a7245';ctx.fillRect(c.x,c.y,c.w,Math.max(4,c.h*0.30));           // lit top
-  ctx.fillStyle='#4a3c24';ctx.fillRect(c.x,c.y+c.h-Math.max(3,c.h*0.18),c.w,Math.max(3,c.h*0.18)); // dark bottom
-  ctx.strokeStyle='#c89b4a';ctx.lineWidth=2;ctx.strokeRect(c.x+1,c.y+1,c.w-2,c.h-2); // brass trim
-  ctx.fillStyle='rgba(231,200,126,0.5)';ctx.fillRect(c.x+c.w*0.5-1,c.y+2,2,c.h-4);   // center brace
-  ctx.fillRect(c.x+2,c.y+c.h*0.5-1,c.w-4,2);                                          // cross brace
+  ctx.fillStyle=C.body;ctx.fillRect(c.x,c.y,c.w,c.h);                               // body
+  ctx.fillStyle=C.top;ctx.fillRect(c.x,c.y,c.w,Math.max(4,c.h*0.30));               // lit top
+  ctx.fillStyle=C.bot;ctx.fillRect(c.x,c.y+c.h-Math.max(3,c.h*0.18),c.w,Math.max(3,c.h*0.18)); // dark bottom
+  ctx.strokeStyle=C.trim;ctx.lineWidth=2;ctx.strokeRect(c.x+1,c.y+1,c.w-2,c.h-2);   // trim
+  ctx.fillStyle=C.brace;ctx.fillRect(c.x+c.w*0.5-1,c.y+2,2,c.h-4);                  // center brace
+  ctx.fillRect(c.x+2,c.y+c.h*0.5-1,c.w-4,2);                                        // cross brace
 }}
 
 function enterRoom(d){
@@ -779,7 +817,17 @@ function throwBomb(){
 }
 
 /* ===================== RENDER ===================== */
-function drawFloor(){const T=36;const vw=cv.width/zoom,vh=cv.height/zoom;const x0=Math.floor(camX/T)-1,x1=Math.ceil((camX+vw)/T)+1,y0=Math.floor(camY/T)-1,y1=Math.ceil((camY+vh)/T)+1;for(let ty=y0;ty<y1;ty++)for(let tx=x0;tx<x1;tx++){const h=((tx*73856093)^(ty*19349663))>>>0;const v=h%100;ctx.fillStyle=v<50?'#1b1912':v<82?'#201d15':'#171510';ctx.fillRect(tx*T,ty*T,T,T);ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(tx*T,ty*T,T,2);ctx.fillRect(tx*T,ty*T,2,T);if(v>=90){ctx.fillStyle='#100e09';ctx.fillRect(tx*T+10,ty*T+12,T-20,T-20);}}}
+function drawFloor(){const T=36;const D=terrDef(),F=D.floor;
+  const vw=cv.width/zoom,vh=cv.height/zoom;
+  const x0=Math.floor(camX/T)-1,x1=Math.ceil((camX+vw)/T)+1,y0=Math.floor(camY/T)-1,y1=Math.ceil((camY+vh)/T)+1;
+  for(let ty=y0;ty<y1;ty++)for(let tx=x0;tx<x1;tx++){
+    const h=((tx*73856093)^(ty*19349663))>>>0;const v=h%100;
+    ctx.fillStyle=v<50?F[0]:v<82?F[1]:F[2];ctx.fillRect(tx*T,ty*T,T,T);
+    ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(tx*T,ty*T,T,2);ctx.fillRect(tx*T,ty*T,2,T);
+    if(v>=90){ctx.fillStyle=D.speck;ctx.fillRect(tx*T+10,ty*T+12,T-20,T-20);}
+    // territory grit: a few scattered marks so rooms don't read as one flat tile sheet
+    if(v>=84&&v<90){ctx.fillStyle=D.fog;ctx.fillRect(tx*T+6,ty*T+6,T-12,T-12);}
+  }}
 function blit(spr,cx,cy,scale,face,fl,flash){const w=spr.width*scale,h=spr.height*scale;ctx.save();ctx.translate(Math.round(cx),Math.round(cy));if(face<0)ctx.scale(-1,1);ctx.drawImage(spr,-w/2,-h/2,w,h);if(flash>0&&fl){ctx.globalAlpha=Math.min(1,flash*6);ctx.drawImage(fl,-w/2,-h/2,w,h);ctx.globalAlpha=1;}ctx.restore();}
 function label(txt,x,y,col){ctx.font='700 10px Oswald';ctx.textAlign='center';ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillText(txt,x+1,y+1);ctx.fillStyle=col;ctx.fillText(txt,x,y);}
 // When the bomb is charged, show exactly where it will land — so the throw is never a surprise.

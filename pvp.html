@@ -227,6 +227,21 @@ const HERO={};for(const f in FAC_PAL)HERO[f]=makeSprite(BRO,FAC_PAL[f]);
 const SP_SCALE=3.0;
 let myFaction='DIAMONDS';
 let myMap='trenchline';   // only used if you're the first into the room
+let curMap='trenchline';  // what the room is actually running
+
+// Each map gets its own look, the same way Solo territories do.
+const MAPSKIN={
+  'trenchline':{ floor:['#1b1912','#201d15','#171510'], speck:'#100e09', grit:'rgba(200,155,74,0.05)',
+                 cov:{body:'#6b5836',top:'#8a7245',bot:'#4a3c24',trim:'#c89b4a',brace:'rgba(231,200,126,0.5)'},
+                 wall:'#080706', hatch:'rgba(200,155,74,0.22)', edge:'rgba(200,155,74,0.6)' },
+  'warren':{     floor:['#161a13','#1c2118','#121610'], speck:'#0d1009', grit:'rgba(155,176,79,0.06)',
+                 cov:{body:'#3d4a2c',top:'#55663b',bot:'#2a3320',trim:'#9bb04f',brace:'rgba(155,176,79,0.45)'},
+                 wall:'#070805', hatch:'rgba(155,176,79,0.20)', edge:'rgba(155,176,79,0.55)' },
+  'the pit':{    floor:['#1f1512','#271a15','#180f0d'], speck:'#130b08', grit:'rgba(255,90,38,0.06)',
+                 cov:{body:'#5d3226',top:'#7a4432',bot:'#3f221a',trim:'#ff5a26',brace:'rgba(255,90,38,0.42)'},
+                 wall:'#0a0605', hatch:'rgba(255,90,38,0.20)', edge:'rgba(255,90,38,0.55)' }
+};
+function skin(){ return MAPSKIN[curMap]||MAPSKIN['trenchline']; }
 let roomCode='';
 let war=[];                   // [{faction,points}]
 let pred=null;                // my predicted position {x,y}
@@ -340,7 +355,7 @@ function join(){
   try{ws=new WebSocket(url);}catch(e){err.textContent='bad server URL';return;}
   ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
   ws.onmessage=(ev)=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
-    if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();if(m.map)setStatus('connected · room '+roomCode+' · '+String(m.map).toUpperCase()+(m.host?' (you set the map)':''),true);}
+    if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();if(m.map){curMap=m.map;setStatus('connected · room '+roomCode+' · '+String(m.map).toUpperCase()+(m.host?' (you set the map)':''),true);}}
     else if(m.t==='state'){onState(m);}
     else if(m.t==='full'){document.getElementById('err').textContent='room is full';}
   };
@@ -610,14 +625,16 @@ function drawFloor(){
   const x0=Math.floor((camX-viewW/2)/T)-1, x1=Math.ceil((camX+viewW/2)/T)+1;
   const y0=Math.floor((camY-viewH/2)/T)-1, y1=Math.ceil((camY+viewH/2)/T)+1;
   for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+    const K=skin(),F=K.floor;
     const hsh=((tx*73856093)^(ty*19349663))>>>0,v=hsh%100;
-    ctx.fillStyle=v<50?'#1b1912':v<82?'#201d15':'#171510';
+    ctx.fillStyle=v<50?F[0]:v<82?F[1]:F[2];
     const px=sx(tx*T),py=sy(ty*T);ctx.fillRect(px,py,ts+1,ts+1);
     ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(px,py,ts,2);ctx.fillRect(px,py,2,ts);
-    if(v>=90){ctx.fillStyle='#100e09';ctx.fillRect(px+10*zoom,py+12*zoom,ts-20*zoom,ts-20*zoom);}
+    if(v>=90){ctx.fillStyle=K.speck;ctx.fillRect(px+10*zoom,py+12*zoom,ts-20*zoom,ts-20*zoom);}
+    else if(v>=84){ctx.fillStyle=K.grit;ctx.fillRect(px+6*zoom,py+6*zoom,ts-12*zoom,ts-12*zoom);}
   }
   // solid wall barrier beyond the play area (reads as an edge, not empty void)
-  ctx.fillStyle='#080706';
+  ctx.fillStyle=skin().wall;
   ctx.fillRect(sx(-200),sy(-200),(W+400)*zoom,(PADY+200)*zoom);              // top
   ctx.fillRect(sx(-200),sy(H-PADY),(W+400)*zoom,(PADY+200)*zoom);           // bottom
   ctx.fillRect(sx(-200),sy(PADY),(PADX+200)*zoom,(H-2*PADY)*zoom);          // left
@@ -627,21 +644,22 @@ function drawFloor(){
   ctx.rect(sx(PADX-26),sy(PADY-26),(W-2*PADX+52)*zoom,(H-2*PADY+52)*zoom);
   ctx.rect(sx(PADX),sy(PADY),(W-2*PADX)*zoom,(H-2*PADY)*zoom);
   ctx.clip('evenodd');
-  ctx.strokeStyle='rgba(200,155,74,0.22)';ctx.lineWidth=6;
+  ctx.strokeStyle=skin().hatch;ctx.lineWidth=6;
   for(let d=-H;d<W+H;d+=26){ctx.beginPath();ctx.moveTo(sx(d),sy(0));ctx.lineTo(sx(d+H),sy(H));ctx.stroke();}
   ctx.restore();
-  ctx.strokeStyle='rgba(200,155,74,0.6)';ctx.lineWidth=4;
+  ctx.strokeStyle=skin().edge;ctx.lineWidth=4;
   ctx.strokeRect(sx(PADX),sy(PADY),(W-2*PADX)*zoom,(H-2*PADY)*zoom);
 }
 function drawCover(){
   for(const c of COVER){
     const x=sx(c[0]),y=sy(c[1]),w=c[2]*zoom,h=c[3]*zoom;
+    const C=skin().cov;
     ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(x-3,y+3,w+6,h+4);                 // drop shadow
-    ctx.fillStyle='#6b5836';ctx.fillRect(x,y,w,h);                                  // warm wood body
-    ctx.fillStyle='#8a7245';ctx.fillRect(x,y,w,Math.max(4,h*0.30));                 // lit top
-    ctx.fillStyle='#4a3c24';ctx.fillRect(x,y+h-Math.max(3,h*0.18),w,Math.max(3,h*0.18)); // dark bottom
-    ctx.strokeStyle='#c89b4a';ctx.lineWidth=Math.max(1.5,2*zoom);ctx.strokeRect(x+1,y+1,w-2,h-2); // brass trim
-    ctx.fillStyle='rgba(231,200,126,0.5)';ctx.fillRect(x+w*0.5-1,y+2,2,h-4);        // brace
+    ctx.fillStyle=C.body;ctx.fillRect(x,y,w,h);                                     // body
+    ctx.fillStyle=C.top;ctx.fillRect(x,y,w,Math.max(4,h*0.30));                     // lit top
+    ctx.fillStyle=C.bot;ctx.fillRect(x,y+h-Math.max(3,h*0.18),w,Math.max(3,h*0.18)); // dark bottom
+    ctx.strokeStyle=C.trim;ctx.lineWidth=Math.max(1.5,2*zoom);ctx.strokeRect(x+1,y+1,w-2,h-2); // trim
+    ctx.fillStyle=C.brace;ctx.fillRect(x+w*0.5-1,y+2,2,h-4);                        // brace
     ctx.fillRect(x+2,y+h*0.5-1,w-4,2);
   }
 }

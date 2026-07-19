@@ -640,6 +640,151 @@ def xaman_status(uuid: str):
     return out
 
 
+@app.get("/nft/list/{wallet}")
+def nft_list(wallet: str, limit: int = 12):
+    """The wallet's actual Trenchers NFTs, so the record page can show them.
+
+    XRPL stores each NFT's metadata pointer as a hex-encoded URI, so we decode it
+    here and hand the client a usable link. The client resolves ipfs:// and reads
+    the `image` field itself — keeps this endpoint cheap and avoids fetching
+    hundreds of metadata files server-side.
+    """
+    if not valid_wallet(wallet):
+        raise HTTPException(status_code=400, detail="invalid wallet address")
+    if not NFT_ENABLED:
+        return {"enabled": False, "count": 0, "nfts": []}
+
+    limit = max(1, min(int(limit or 12), 40))
+    out: List[Dict] = []
+    marker, pages = None, 0
+    try:
+        with httpx.Client(timeout=12) as client:
+            while pages < 3:
+                params = {"account": wallet, "ledger_index": "validated", "limit": 400}
+                if marker:
+                    params["marker"] = marker
+                r = client.post(XRPL_RPC, json={"method": "account_nfts", "params": [params]})
+                r.raise_for_status()
+                res = r.json().get("result", {})
+                for n in res.get("account_nfts", []):
+                    if n.get("Issuer") != NFT_ISSUER:
+                        continue
+                    if NFT_TAXON and str(n.get("NFTokenTaxon")) != NFT_TAXON:
+                        continue
+                    uri_hex = n.get("URI") or ""
+                    try:
+                        uri = bytes.fromhex(uri_hex).decode("utf-8", "ignore") if uri_hex else ""
+                    except ValueError:
+                        uri = ""
+                    out.append({
+                        "id": n.get("NFTokenID"),
+                        "serial": n.get("nft_serial"),
+                        "uri": uri,
+                    })
+                marker = res.get("marker")
+                pages += 1
+                if not marker:
+                    break
+    except Exception:
+        return {"enabled": True, "count": 0, "nfts": [], "error": "lookup failed"}
+
+    out.sort(key=lambda d: d.get("serial") or 0)
+    return {"enabled": True, "count": len(out), "nfts": out[:limit]}
+
+
+_nft_list_cache: Dict[str, tuple] = {}
+_meta_cache: Dict[str, Optional[str]] = {}
+
+
+def _ipfs_http(uri: str) -> str:
+    """ipfs://CID/path -> a public gateway URL the browser can load."""
+    if uri.startswith("ipfs://"):
+        return "https://ipfs.io/ipfs/" + uri[len("ipfs://"):]
+    return uri
+
+
+def _resolve_image(meta_uri: str) -> Optional[str]:
+    """Fetch an NFT's metadata JSON and return a loadable image URL.
+
+    Metadata usually stores a relative filename ("12.webp"), so it has to be
+    resolved against the metadata's own folder.
+    """
+    if meta_uri in _meta_cache:
+        return _meta_cache[meta_uri]
+    img = None
+    try:
+        url = _ipfs_http(meta_uri)
+        with httpx.Client(timeout=10, follow_redirects=True) as c:
+            m = c.get(url).json()
+        raw = (m.get("image") or "").strip()
+        if raw:
+            if raw.startswith("ipfs://") or raw.startswith("http"):
+                img = _ipfs_http(raw)
+            else:
+                base = meta_uri.rsplit("/", 1)[0]          # strip the filename
+                img = _ipfs_http(base + "/" + raw.lstrip("/"))
+    except Exception:
+        img = None
+    _meta_cache[meta_uri] = img
+    return img
+
+
+@app.get("/nft/list/{wallet}")
+def nft_list(wallet: str, limit: int = 12):
+    """The wallet's Trenchers NFTs with image URLs, for showing on the record page."""
+    if not valid_wallet(wallet):
+        raise HTTPException(status_code=400, detail="invalid wallet address")
+    if not NFT_ENABLED:
+        return {"count": 0, "items": [], "enabled": False}
+
+    limit = max(1, min(24, limit))
+    now = time.time()
+    hit = _nft_list_cache.get(wallet)
+    if hit and now - hit[0] < NFT_CACHE_TTL:
+        rows = hit[1]
+        return {"count": len(rows), "items": rows[:limit], "enabled": True}
+
+    found = []
+    marker, pages = None, 0
+    try:
+        with httpx.Client(timeout=12) as client:
+            while pages < 3:
+                params = {"account": wallet, "ledger_index": "validated", "limit": 400}
+                if marker:
+                    params["marker"] = marker
+                r = client.post(XRPL_RPC, json={"method": "account_nfts", "params": [params]})
+                r.raise_for_status()
+                res = r.json().get("result", {})
+                for n in res.get("account_nfts", []):
+                    if n.get("Issuer") != NFT_ISSUER:
+                        continue
+                    if NFT_TAXON and str(n.get("NFTokenTaxon")) != NFT_TAXON:
+                        continue
+                    uri_hex = n.get("URI") or ""
+                    try:
+                        meta_uri = bytes.fromhex(uri_hex).decode("utf-8", "ignore") if uri_hex else ""
+                    except ValueError:
+                        meta_uri = ""
+                    found.append({
+                        "id": n.get("NFTokenID"),
+                        "serial": n.get("nft_serial"),
+                        "meta": meta_uri,
+                    })
+                marker = res.get("marker")
+                pages += 1
+                if not marker:
+                    break
+    except Exception:
+        return {"count": 0, "items": [], "enabled": True}
+
+    found.sort(key=lambda x: x.get("serial") or 0)
+    # only resolve images for the ones actually being displayed — each is a network hop
+    for row in found[:limit]:
+        row["image"] = _resolve_image(row["meta"]) if row["meta"] else None
+    _nft_list_cache[wallet] = (now, found)
+    return {"count": len(found), "items": found[:limit], "enabled": True}
+
+
 @app.get("/nft/holder/{wallet}")
 def nft_holder(wallet: str):
     """Does this wallet hold a Trenchers NFT? The bridge for perks, faction, and

@@ -134,6 +134,14 @@
     <input id="nameIn" maxlength="16" placeholder="NAME" />
     <div class="fchips" id="fchips"></div>
     <input id="roomIn" maxlength="8" placeholder="ROOM CODE" />
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);letter-spacing:1px;margin-top:4px;">
+      MAP <span style="opacity:.6;">— applies if you're first into the room</span>
+    </div>
+    <div id="mapChips" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+      <div class="fchip sel" data-m="trenchline">TRENCHLINE</div>
+      <div class="fchip" data-m="warren">WARREN</div>
+      <div class="fchip" data-m="the pit">THE PIT</div>
+    </div>
     <button class="btn" id="joinBtn">ENTER THE TRENCH</button>
     <button id="guideBtn">HOW TO PLAY</button>
     <div class="err" id="err"></div>
@@ -218,6 +226,7 @@ const FAC_PAL={
 const HERO={};for(const f in FAC_PAL)HERO[f]=makeSprite(BRO,FAC_PAL[f]);
 const SP_SCALE=3.0;
 let myFaction='DIAMONDS';
+let myMap='trenchline';   // only used if you're the first into the room
 let roomCode='';
 let war=[];                   // [{faction,points}]
 let pred=null;                // my predicted position {x,y}
@@ -326,12 +335,12 @@ function join(){
   if(!room){err.textContent='enter a room code';return;}
   err.textContent='';
   roomCode=room;
-  const url=REALTIME_URL.replace(/\/$/,'')+'/ws/'+encodeURIComponent(room);
+  const url=REALTIME_URL.replace(/\/$/,'')+'/ws/'+encodeURIComponent(room)+'?map='+encodeURIComponent(myMap);
   setStatus('connecting…',false);
   try{ws=new WebSocket(url);}catch(e){err.textContent='bad server URL';return;}
   ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
   ws.onmessage=(ev)=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
-    if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();}
+    if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();if(m.map)setStatus('connected · room '+roomCode+' · '+String(m.map).toUpperCase()+(m.host?' (you set the map)':''),true);}
     else if(m.t==='state'){onState(m);}
     else if(m.t==='full'){document.getElementById('err').textContent='room is full';}
   };
@@ -342,6 +351,15 @@ function join(){
 // Everyone deploys with the same PISTOL — you buy your way up from the market
 // mid-fight, so no one gets an edge before the match even starts.
 const myLoadout=0;
+(function(){
+  const wrap=document.getElementById('mapChips');
+  if(!wrap)return;
+  wrap.addEventListener('click',e=>{
+    const c=e.target.closest('.fchip'); if(!c)return;
+    myMap=c.getAttribute('data-m');
+    [...wrap.querySelectorAll('.fchip')].forEach(x=>x.classList.toggle('sel',x===c));
+  });
+})();
 function tryJoin(){
   const room=(document.getElementById('roomIn').value||'').trim();
   const err=document.getElementById('err');

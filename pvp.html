@@ -47,9 +47,25 @@
   #war .r{display:flex;justify-content:space-between;gap:10px;line-height:1.5;}
   .fchips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:340px;}
   .fchip.locked{opacity:.42;cursor:not-allowed;}
+  .clscards{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .clscard{position:relative;cursor:pointer;width:104px;padding:9px 8px 10px;text-align:center;
+    background:linear-gradient(180deg,rgba(36,32,21,.95),rgba(18,16,11,.95));
+    border:1px solid rgba(200,155,74,.3);transition:transform .12s,border-color .12s;}
+  .clscard:hover{transform:translateY(-2px);border-color:rgba(231,200,126,.75);}
+  .clscard.sel{border-color:#e7c87e;box-shadow:0 0 0 1px #e7c87e inset,0 6px 18px rgba(0,0,0,.5);}
+  .clscard canvas{display:block;margin:0 auto;image-rendering:pixelated;}
+  .clscard .cn{font-family:'Oswald';font-weight:700;font-size:13px;letter-spacing:1.5px;color:var(--bone);margin-top:3px;}
+  .clscard .cr{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--bone-dim);}
+  .clscard .cst{font-family:'Space Mono',monospace;font-size:8px;color:var(--brass-br);margin-top:4px;line-height:1.5;}
+  .clscard.locked{cursor:not-allowed;border-color:rgba(154,144,121,.22);}
+  .clscard.locked canvas,.clscard.locked .cn,.clscard.locked .cr,.clscard.locked .cst{opacity:.3;filter:grayscale(1);}
+  .clslock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+  .clslock .i{font-size:18px;}
+  .clslock .t{font-family:'Space Mono',monospace;font-size:7.5px;letter-spacing:.06em;color:var(--brass-br);
+    background:rgba(12,11,7,.9);border:1px solid rgba(200,155,74,.45);padding:3px 5px;line-height:1.4;}
   .fchip .lk{font-size:9px;}
   .fchip{cursor:pointer;border:1px solid rgba(200,155,74,.4);background:#0c0b07;color:var(--bone);font-family:'Oswald';font-weight:600;font-size:12px;letter-spacing:1px;padding:7px 13px;}
-  .fchip.sel{color:#100f0a;}
+  .fchip.sel{color:#100f0a;background:linear-gradient(180deg,#e7c87e,#c89b4a);border-color:#e7c87e;font-weight:700;}
   #waiting{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;background:radial-gradient(ellipse at 50% 40%,rgba(40,36,22,.55),rgba(8,7,4,.93) 75%);}
   /* ---- mobile: shrink + declutter so the play area stays clear ---- */
   @media (max-width:900px), (pointer:coarse){
@@ -132,18 +148,13 @@
   <div id="lobby">
     <a href="index.html" class="backlink">← BACK</a>
     <div class="title">TREN<span class="b">CHERS</span> · PVP</div>
-    <div class="sub">Pick your faction and drop into the trench. First to 5 kills takes the round and a point in the faction war.</div>
+    <div class="sub">Pick your class and drop into the trench. First to 5 kills takes the round and a point in the faction war.</div>
     <input id="nameIn" maxlength="16" placeholder="NAME" />
-    <div class="fchips" id="fchips"></div>
     <input id="roomIn" maxlength="8" placeholder="ROOM CODE" />
     <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--bone-dim);letter-spacing:1px;margin-top:4px;">
       CLASS
     </div>
-    <div id="clsChips" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
-      <div class="fchip sel" data-c="aper">APER</div>
-      <div class="fchip" data-c="diamond">DIAMOND <span class="lk">🔒</span></div>
-      <div class="fchip" data-c="sniper">SNIPER <span class="lk">🔒</span></div>
-    </div>
+    <div id="clsCards" class="clscards"></div>
     <div id="clsNote" style="font-family:'Space Mono',monospace;font-size:9px;color:var(--bone-dim);opacity:.75;">
       DIAMOND &amp; SNIPER need a Trenchers NFT
     </div>
@@ -244,6 +255,9 @@ const SP_SCALE=3.0;
 let myFaction='DIAMONDS';
 let myMap='trenchline';   // only used if you're the first into the room
 let myClass='aper';
+// One identity choice: your class also decides your faction, so the faction-war
+// scoreboard keeps working without asking the player twice.
+const CLS_FACTION={aper:'APES',diamond:'DIAMONDS',sniper:'SNIPERS'};
 let nftCount=0;
 const API_URL="https://web-production-e7758.up.railway.app";
 
@@ -257,17 +271,55 @@ async function refreshPvpNft(){
   }catch(e){nftCount=0;}
   paintClassChips();
 }
+// Class cards use the same character sprite and palettes as Solo, so the two
+// modes read as the same game.
+const PVP_CLS = {
+  aper:   {name:'APER',   role:'SPEED', pal:{'u':'#7a4a22','U':'#9a5e2c','p':'#5e3818'},
+           stat:'100 HP · fast', gated:false},
+  diamond:{name:'DIAMOND',role:'TANK',  pal:{'u':'#566066','U':'#71808a','p':'#3f474c'},
+           stat:'165 HP · +15% dmg', gated:true},
+  sniper: {name:'SNIPER', role:'RANGE', pal:{'u':'#37402c','U':'#49562f','p':'#2a311f'},
+           stat:'85 HP · +40% dmg', gated:true}
+};
+const CLS_SPR={}; for(const k in PVP_CLS) CLS_SPR[k]=makeSprite(BRO,PVP_CLS[k].pal);
+
 function paintClassChips(){
-  const wrap=document.getElementById('clsChips'); if(!wrap)return;
+  const wrap=document.getElementById('clsCards'); if(!wrap)return;
   const holder=nftCount>0;
-  [...wrap.querySelectorAll('.fchip')].forEach(c=>{
-    const k=c.getAttribute('data-c');
-    const locked=(k!=='aper')&&!holder;
-    c.classList.toggle('locked',locked);
-    const lk=c.querySelector('.lk'); if(lk)lk.style.display=locked?'inline':'none';
-    if(locked&&myClass===k){myClass='aper';}
-    c.classList.toggle('sel',k===myClass);
-  });
+  wrap.innerHTML='';
+  for(const k in PVP_CLS){
+    const C=PVP_CLS[k], locked=C.gated&&!holder;
+    if(locked&&myClass===k)myClass='aper';
+    const card=document.createElement('div');
+    card.className='clscard'+(k===myClass?' sel':'')+(locked?' locked':'');
+
+    const cc=document.createElement('canvas');cc.width=62;cc.height=68;
+    const x=cc.getContext('2d');x.imageSmoothingEnabled=false;
+    const g=x.createRadialGradient(31,34,3,31,34,34);
+    g.addColorStop(0,'rgba(200,155,74,0.14)');g.addColorStop(1,'rgba(200,155,74,0)');
+    x.fillStyle=g;x.fillRect(0,0,62,68);
+    const spr=CLS_SPR[k],sc=2.7,sw=spr.width*sc,sh=spr.height*sc;
+    x.fillStyle='rgba(0,0,0,0.35)';x.beginPath();x.ellipse(31,60,sw*0.32,4,0,0,6.3);x.fill();
+    x.drawImage(spr,(62-sw)/2,(68-sh)/2-3,sw,sh);
+    card.appendChild(cc);
+
+    const nm=document.createElement('div');nm.className='cn';nm.textContent=C.name;card.appendChild(nm);
+    const rl=document.createElement('div');rl.className='cr';rl.textContent=C.role;card.appendChild(rl);
+    const st=document.createElement('div');st.className='cst';st.textContent=C.stat;card.appendChild(st);
+
+    if(locked){
+      const lk=document.createElement('div');lk.className='clslock';
+      lk.innerHTML='<div class="i">🔒</div><div class="t">TRENCHERS<br>NFT</div>';
+      card.appendChild(lk);
+      card.addEventListener('click',()=>{
+        const note=document.getElementById('clsNote');
+        if(note)note.textContent='Hold a Trenchers NFT to unlock '+C.name+'.';
+      });
+    } else {
+      card.addEventListener('click',()=>{myClass=k;myFaction=CLS_FACTION[k]||'APES';paintClassChips();});
+    }
+    wrap.appendChild(card);
+  }
   const note=document.getElementById('clsNote');
   if(note)note.textContent = holder
     ? 'NFT verified — all classes unlocked ('+nftCount+' held)'
@@ -373,21 +425,6 @@ function clampy(v){return Math.min(H-PADY,Math.max(PADY,v));}
 document.getElementById('urlNote').textContent='server: '+REALTIME_URL;
 function setStatus(t,on){document.getElementById('statusText').textContent=t;document.getElementById('status').classList.toggle('on',!!on);}
 
-// faction picker
-(function buildFactionPicker(){
-  const wrap=document.getElementById('fchips');
-  wrap.innerHTML=FACTIONS.map(f=>`<div class="fchip" data-f="${f}">${f}</div>`).join('');
-  function paint(){
-    for(const c of wrap.querySelectorAll('.fchip')){
-      const f=c.getAttribute('data-f'),sel=(f===myFaction);
-      c.classList.toggle('sel',sel);
-      c.style.background=sel?FCOLOR[f]:'#0c0b07';
-      c.style.borderColor=FCOLOR[f];
-    }
-  }
-  wrap.addEventListener('click',e=>{const c=e.target.closest('.fchip');if(!c)return;myFaction=c.getAttribute('data-f');paint();});
-  paint();
-})();
 
 function join(){
   const room=(document.getElementById('roomIn').value||'').trim().toUpperCase();
@@ -399,7 +436,8 @@ function join(){
   const url=REALTIME_URL.replace(/\/$/,'')+'/ws/'+encodeURIComponent(room)+'?map='+encodeURIComponent(myMap);
   setStatus('connecting…',false);
   try{ws=new WebSocket(url);}catch(e){err.textContent='bad server URL';return;}
-  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'class',cls:myClass}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
+  ws.onopen=()=>{connected=true;setStatus('connected · room '+room,true);document.getElementById('lobby').classList.add('hidden');document.getElementById('marketTab').classList.add('show');document.getElementById('leaveBtn').classList.add('show');document.getElementById('war').style.display='block';AudioFX.init();AudioFX.resume();BGM.start();if(name)ws.send(JSON.stringify({t:'name',name}));const _w=connectedWallet();if(_w)ws.send(JSON.stringify({t:'wallet',wallet:_w}));myFaction=CLS_FACTION[myClass]||'APES';
+    ws.send(JSON.stringify({t:'faction',f:myFaction}));ws.send(JSON.stringify({t:'class',cls:myClass}));ws.send(JSON.stringify({t:'loadout',tier:myLoadout}));startInputLoop();};
   ws.onmessage=(ev)=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
     if(m.t==='welcome'){myId=m.id;W=m.w||W;H=m.h||H;PADX=m.padx||0;PADY=m.pady||0;COVER=m.cover||[];resize();if(m.map){curMap=m.map;setStatus('connected · room '+roomCode+' · '+String(m.map).toUpperCase()+(m.host?' (you set the map)':''),true);}}
     else if(m.t==='state'){onState(m);}
@@ -413,14 +451,6 @@ function join(){
 // mid-fight, so no one gets an edge before the match even starts.
 const myLoadout=0;
 (function(){
-  const wrap=document.getElementById('clsChips');
-  if(wrap){
-    wrap.addEventListener('click',e=>{
-      const c=e.target.closest('.fchip'); if(!c||c.classList.contains('locked'))return;
-      myClass=c.getAttribute('data-c');
-      paintClassChips();
-    });
-  }
   refreshPvpNft();
 })();
 (function(){

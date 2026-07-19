@@ -286,38 +286,51 @@ async function loadNftGallery(wallet){
   }catch(e){ return; }
 
   if(!data || !data.enabled) return;
-  const items = data.items || [];
-  if(!items.length){
+  const list = data.nfts || [];
+  if(!list.length){
     grid.className = 'nftempty';
     grid.innerHTML = "You don't hold any Trenchers NFTs yet.<br>"
       + 'Holding one unlocks the DIAMOND and SNIPER classes and boosts your XP.';
     return;
   }
 
-  // The backend already resolved each image URL (it follows the metadata itself,
-  // which avoids the browser hitting IPFS gateways and tripping CORS).
   grid.className = 'nftgrid';
   grid.innerHTML = '';
-  items.forEach(n => {
-    if(!n.image) return;
+  list.forEach(n => {
     const card = document.createElement('div');
     card.className = 'nftcard';
     const img = document.createElement('img');
-    img.alt = 'Trenchers NFT';
-    img.loading = 'lazy';
-    img.src = n.image;
-    img.onerror = () => card.remove();
+    img.alt = 'Trenchers NFT'; img.loading = 'lazy';
     const nid = document.createElement('div');
     nid.className = 'nid';
     nid.textContent = '#' + (n.serial ?? '?');
     card.appendChild(img); card.appendChild(nid);
     grid.appendChild(card);
+
+    // Each NFT's URI points at its metadata JSON; the image lives inside it.
+    const metaUrl = resolveUri(n.uri);
+    if(!metaUrl){ card.remove(); return; }
+    fetch(metaUrl)
+      .then(r => r.json())
+      .then(meta => {
+        const raw = meta.image || (meta.properties && meta.properties.files
+                    && meta.properties.files[0] && meta.properties.files[0].uri) || '';
+        let src = '';
+        if(raw){
+          if(/^(ipfs:\/\/|https?:\/\/)/.test(raw)) src = resolveUri(raw);
+          else src = metaUrl.slice(0, metaUrl.lastIndexOf('/')) + '/' + raw.replace(/^\//,'');
+        }
+        if(src){ img.src = src; if(meta.name) nid.textContent = meta.name; }
+        else card.remove();
+      })
+      .catch(() => card.remove());
+    img.onerror = () => card.remove();
   });
 
-  if(data.count > items.length){
+  if(data.count > list.length){
     const more = document.createElement('div');
     more.className = 'nftmore';
-    more.textContent = '+ ' + (data.count - items.length) + ' more';
+    more.textContent = '+ ' + (data.count - list.length) + ' more';
     grid.appendChild(more);
   }
 }
